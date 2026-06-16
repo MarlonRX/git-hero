@@ -36,22 +36,25 @@ curl_get() {
     curl -fsSL --max-time 30 "$1" -o "$2" 2>/dev/null
 }
 
-# Spinner for long-running operations
+# Spinner for long-running operations with 8‑bit robot sprite
 spinner() {
     local pid=$1
     local label="${2:-Working...}"
-    local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    # Simple robot ASCII frames (5)
+    local robot_frames=('🤖' '⡿' '⣟' '⣯' '⣿')
+    local spinner_frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
-    local start_time
-    start_time=$(date +%s)
+    local r=0
+    local start_time=$(date +%s)
 
     # Hide cursor
     tput civis 2>/dev/null || true
 
     while kill -0 "$pid" 2>/dev/null; do
         local elapsed=$(( $(date +%s) - start_time ))
-        printf "\r  ${CYAN}${frames[$i]}${NC} ${label} ${DIM}(%ds)${NC}  " "$elapsed"
-        i=$(( (i + 1) % ${#frames[@]} ))
+        printf "\r  ${CYAN}${spinner_frames[$i]}${NC} ${label} ${DIM}(%ds)${NC} ${MAGENTA}%s${NC} " "$elapsed" "${robot_frames[$r]}"
+        i=$(( (i + 1) % ${#spinner_frames[@]} ))
+        r=$(( (r + 1) % ${#robot_frames[@]} ))
         sleep 0.1
     done
 
@@ -79,7 +82,12 @@ status_fail() { printf "\r  ${RED}✘${NC}  %s\n" "$1"; }
 status_skip() { printf "\r  ${DIM}○${NC}  ${DIM}%s${NC}\n" "$1"; }
 
 # ── Banner ───────────────────────────────────────────────────────────
+# Print a header with app name and version
+print_app_header() {
+    echo -e "${MAGENTA}${BOLD}GIT HERO V beta 0.1${NC}"
+}
 echo ""
+print_app_header
 echo -e "${CYAN}${BOLD}"
 cat << 'LOGO'
       ┌─────────────────────────────────────────┐

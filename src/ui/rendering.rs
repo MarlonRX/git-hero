@@ -144,7 +144,8 @@ pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Li
                 ])
             } else if line.starts_with("---") || line.starts_with("+++") {
                 // File paths → both sides with accent
-                let text = &line[4..];
+                // Guard against short lines to avoid panic on &line[4..]
+                let text = if line.len() > 4 { &line[4..] } else { "" };
                 let col = fit(text);
                 Line::from(vec![
                     Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
@@ -210,6 +211,24 @@ pub fn render_diff_lines(diff: &str, theme: &Theme) -> Vec<Line<'static>> {
 }
 
 // ═════════════════════════════════════════════════════════════════════════
+//  GIT HERO ASCII ART
+// ═════════════════════════════════════════════════════════════════════════
+
+/// Compact ASCII art for the Git Hero brand — 5 lines, ~46 chars wide.
+/// Uses Unicode box-drawing glyphs for a clean figlet-style look.
+const GIT_HERO_ASCII: &[&str] = &[
+    "  ███████ ██╗ ████████╗     ██╗  ██╗███████╗██████╗  ██████╗ ",
+    " ██╔════╝ ██║ ╚══██╔══╝     ██║  ██║██╔════╝██╔══██╗██╔═══██╗",
+    " ██║  ███╗██║    ██║        ███████║█████╗  ██████╔╝██║   ██║",
+    " ██║   ██║██║    ██║        ██╔══██║██╔══╝  ██╔══██╗██║   ██║",
+    " ╚██████╔╝██║    ██║        ██║  ██║███████╗██║  ██║╚██████╔╝",
+    "  ╚═════╝ ╚═╝    ╚═╝        ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ",
+];
+
+const GIT_HERO_TAGLINE: &str = "Your terminal git companion";
+const GIT_HERO_CREDIT: &str = "developed by abvilabs";
+
+// ═════════════════════════════════════════════════════════════════════════
 //  MAIN UI
 // ═════════════════════════════════════════════════════════════════════════
 
@@ -225,13 +244,20 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
     // 1. Full theme background
     f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), area);
 
-    // 2. Centered 80% layout
+    // 2. Centered 80% layout — shifted down to leave room for ASCII banner
     let target_w = (area.width as f32 * 0.80) as u16;
-    let target_h = (area.height as f32 * 0.85) as u16;
+    let target_h = (area.height as f32 * 0.78) as u16; // slightly shorter to accommodate banner
+
+    // Reserve space for ASCII banner + tagline + version + credit + gap
+    let banner_reserve: u16 = if area.width >= 50 && area.height >= 22 {
+        GIT_HERO_ASCII.len() as u16 + 5 // ascii(5) + tagline(1) + version(1) + credit(1) + gap(1)
+    } else {
+        0
+    };
 
     let outer = Rect {
         x: area.x + (area.width.saturating_sub(target_w)) / 2,
-        y: area.y + (area.height.saturating_sub(target_h)) / 2,
+        y: area.y + banner_reserve + (area.height.saturating_sub(banner_reserve + target_h)) / 2,
         width: target_w.max(40),
         height: target_h.max(10),
     };
@@ -250,23 +276,98 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         height: outer.height.saturating_sub(2),
     };
 
-    // 5. Header — text directly on the border line (no badges, no fill gaps)
-    let header_text = format!("[ GIT HERO {} ]", s.get_icon_str("commit"));
-    f.render_widget(
-        Paragraph::new(header_text)
-            .style(Style::default().fg(s.theme.primary).bg(s.theme.border).add_modifier(Modifier::BOLD)),
-        Rect { x: outer.x + 2, y: outer.y, width: 20, height: 1 },
-    );
+    // 5. ASCII art banner ABOVE the main panel (outside the border)
+    let ascii_h = if area.width >= 50 && area.height >= 22 {
+        GIT_HERO_ASCII.len() as u16 + 3 // +1 for tagline, +1 for version, +1 for credit
+    } else {
+        0
+    };
 
-    // Theme name on the right side of top border
-    let badge_text = format!("[ {} ]", s.theme.name);
-    let badge_w = badge_text.chars().count() as u16;
-    let badge_x = outer.x + outer.width.saturating_sub(badge_w + 2);
-    f.render_widget(
-        Paragraph::new(badge_text)
-            .style(Style::default().fg(s.theme.accent).bg(s.theme.border).add_modifier(Modifier::BOLD)),
-        Rect { x: badge_x, y: outer.y, width: badge_w, height: 1 },
-    );
+    if ascii_h > 0 {
+        // Start ASCII art with generous top margin for breathing room
+        let ascii_y_start = area.y + 3;
+
+        // Render each line of the ASCII art, centered horizontally on full screen
+        for (i, line) in GIT_HERO_ASCII.iter().enumerate() {
+            let lw = line.chars().count() as u16;
+            let pad = (area.width.saturating_sub(lw)) / 2;
+            f.render_widget(
+                Paragraph::new(*line)
+                    .style(
+                        Style::default()
+                            .fg(s.theme.primary)
+                            .bg(s.theme.background)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                Rect {
+                    x: area.x + pad,
+                    y: ascii_y_start + i as u16,
+                    width: lw,
+                    height: 1,
+                },
+            );
+        }
+
+        // Tagline below the ASCII art (with a blank line gap)
+        let tag_y = ascii_y_start + GIT_HERO_ASCII.len() as u16 + 1;
+        let tag_w = GIT_HERO_TAGLINE.chars().count() as u16;
+        let tag_pad = (area.width.saturating_sub(tag_w)) / 2;
+        f.render_widget(
+            Paragraph::new(GIT_HERO_TAGLINE)
+                .style(
+                    Style::default()
+                        .fg(s.theme.dimmed)
+                        .bg(s.theme.background)
+                        .add_modifier(Modifier::ITALIC),
+                ),
+            Rect {
+                x: area.x + tag_pad,
+                y: tag_y,
+                width: tag_w,
+                height: 1,
+            },
+        );
+
+        // Version badge below tagline — pulled from Cargo.toml + git at build time
+        let ver_text = crate::version::full();
+        let ver_w = ver_text.chars().count() as u16;
+        let ver_pad = (area.width.saturating_sub(ver_w)) / 2;
+        let ver_y = tag_y + 1;
+        f.render_widget(
+            Paragraph::new(ver_text)
+                .style(
+                    Style::default()
+                        .fg(s.theme.accent)
+                        .bg(s.theme.background)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            Rect {
+                x: area.x + ver_pad,
+                y: ver_y,
+                width: ver_w,
+                height: 1,
+            },
+        );
+
+        // Credit line below the version badge
+        let cred_w = GIT_HERO_CREDIT.chars().count() as u16;
+        let cred_pad = (area.width.saturating_sub(cred_w)) / 2;
+        f.render_widget(
+            Paragraph::new(GIT_HERO_CREDIT)
+                .style(
+                    Style::default()
+                        .fg(s.theme.dimmed)
+                        .bg(s.theme.background)
+                        .add_modifier(Modifier::ITALIC),
+                ),
+            Rect {
+                x: area.x + cred_pad,
+                y: ver_y + 1,
+                width: cred_w,
+                height: 1,
+            },
+        );
+    }
 
     // 6. Footer reservation
     let footer_h: u16 = 2;

@@ -136,6 +136,8 @@ impl AppState {
 			init_cursor: 0,
 			init_branch_name: String::new(),
 			init_remote_url: String::new(),
+			sprite_frames: vec!["🤖", "⡿", "⣟", "⣯", "⣿"],
+			sprite_index: 0,
 		};
 
 		if config.language.is_empty() {

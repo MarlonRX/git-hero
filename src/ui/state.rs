@@ -328,7 +328,23 @@ impl AppState {
         {
             let hash = &self.commits[self.selected_commit_idx].hash;
             self.active_diff = match git::run_git(&["show", "--stat", "--patch", hash]) {
-                Ok(out) => out,
+                Ok(out) => {
+                    // Truncate large commit diffs to keep the UI snappy and prevent
+                    // memory/perf issues when navigating between commits. Mirrors
+                    // the truncation applied to untracked file content below.
+                    let lines: Vec<&str> = out.split('\n').collect();
+                    const MAX_COMMIT_DIFF_LINES: usize = 500;
+                    if lines.len() > MAX_COMMIT_DIFF_LINES {
+                        let mut truncated = lines[..MAX_COMMIT_DIFF_LINES].join("\n");
+                        truncated.push_str(&format!(
+                            "\n... (truncated, {} more lines)",
+                            lines.len() - MAX_COMMIT_DIFF_LINES
+                        ));
+                        truncated
+                    } else {
+                        out
+                    }
+                }
                 Err(e) => format!("Error showing commit: {}", e),
             };
         } else if !self.files.is_empty() && self.selected_file_idx < self.files.len() {

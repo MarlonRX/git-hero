@@ -4,6 +4,7 @@ mod i18n;
 mod git;
 mod cli;
 mod ui;
+mod version;
 
 use std::env;
 use std::fs::OpenOptions;
