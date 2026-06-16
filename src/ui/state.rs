@@ -72,6 +72,12 @@ pub struct AppState {
     pub theme_cursor: usize,
     pub saved_theme: String,
 
+    // ── Mini Console ───────────────────────────────────────────────
+    pub console_output: String,
+    pub console_visible: bool,
+    pub console_scroll: usize,
+    pub console_running: bool,
+
     // ── Wizards ────────────────────────────────────────────────────
     pub setup_step: usize,
     pub setup_cursor: usize,
@@ -133,6 +139,10 @@ impl AppState {
             show_docs_modal: false,
             theme_cursor: 0,
             saved_theme: config.theme,
+            console_output: String::new(),
+            console_visible: false,
+            console_scroll: 0,
+            console_running: false,
             setup_step: 0,
             setup_cursor: 0,
             init_wizard_active: false,
@@ -383,11 +393,23 @@ impl AppState {
                 self.status_message = translate(&self.language, "status_not_git");
                 return;
             }
-            self.fetching = true;
+            self.console_running = true;
+            self.console_visible = true;
+            self.console_scroll = 0;
+            self.console_output = format!("$ git fetch {} {}\n", self.remote, self.branch);
             self.status_message = translate(&self.language, "status_fetching");
             let remote = self.remote.clone();
             let branch = self.branch.clone();
-            let _ = git::fetch_remote(&remote, &branch);
+            match git::run_git_verbose(&["fetch", &remote, &branch]) {
+                Ok(out) => {
+                    self.console_output.push_str(&out);
+                    self.console_output.push_str("\n✓ Fetch complete.");
+                }
+                Err(e) => {
+                    self.console_output.push_str(&e);
+                }
+            }
+            self.console_running = false;
             self.fetching = false;
             self.refresh_git_status();
             return;
@@ -398,10 +420,23 @@ impl AppState {
                 self.status_message = translate(&self.language, "status_not_git");
                 return;
             }
+            self.console_running = true;
+            self.console_visible = true;
+            self.console_scroll = 0;
+            self.console_output = format!("$ git pull {} {}\n", self.remote, self.branch);
             self.status_message = translate(&self.language, "status_pulling");
             let remote = self.remote.clone();
             let branch = self.branch.clone();
-            let _ = git::git_pull(&remote, &branch);
+            match git::run_git_verbose(&["pull", &remote, &branch]) {
+                Ok(out) => {
+                    self.console_output.push_str(&out);
+                    self.console_output.push_str("\n✓ Pull complete.");
+                }
+                Err(e) => {
+                    self.console_output.push_str(&e);
+                }
+            }
+            self.console_running = false;
             self.refresh_git_status();
             return;
         }
@@ -411,10 +446,23 @@ impl AppState {
                 self.status_message = translate(&self.language, "status_not_git");
                 return;
             }
+            self.console_running = true;
+            self.console_visible = true;
+            self.console_scroll = 0;
+            self.console_output = format!("$ git push {} {}\n", self.remote, self.branch);
             self.status_message = translate(&self.language, "status_pushing");
             let remote = self.remote.clone();
             let branch = self.branch.clone();
-            let _ = git::git_push(&remote, &branch);
+            match git::run_git_verbose(&["push", &remote, &branch]) {
+                Ok(out) => {
+                    self.console_output.push_str(&out);
+                    self.console_output.push_str("\n✓ Push complete.");
+                }
+                Err(e) => {
+                    self.console_output.push_str(&e);
+                }
+            }
+            self.console_running = false;
             self.refresh_git_status();
             return;
         }

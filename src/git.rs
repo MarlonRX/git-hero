@@ -1,6 +1,33 @@
 use std::process::Command;
 use std::str;
 
+// Run a git command and return stdout+stderr combined (for verbose output).
+// This is used by the mini-console to show real git progress.
+pub fn run_git_verbose(args: &[&str]) -> Result<String, String> {
+    let mut cmd = Command::new("git");
+    cmd.args(args);
+    match cmd.output() {
+        Ok(output) => {
+            let mut combined = String::new();
+            let stdout = str::from_utf8(&output.stdout).unwrap_or("");
+            let stderr = str::from_utf8(&output.stderr).unwrap_or("");
+            if !stdout.is_empty() {
+                combined.push_str(stdout.trim());
+            }
+            if !stderr.is_empty() {
+                if !combined.is_empty() { combined.push('\n'); }
+                combined.push_str(stderr.trim());
+            }
+            if output.status.success() {
+                Ok(combined)
+            } else {
+                Err(if combined.is_empty() { "Unknown error".to_string() } else { combined })
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 // Run a git command and return stdout as string or an error message
 pub fn run_git(args: &[&str]) -> Result<String, String> {
     let mut cmd = Command::new("git");

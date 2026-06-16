@@ -397,7 +397,10 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_docs_modal(f, s);
     }
 
-
+    // 11. Mini Console (overlay at bottom)
+    if s.console_visible {
+        draw_console(f, area, s);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -972,4 +975,114 @@ fn draw_compact(f: &mut Frame, s: &mut AppState, body: Rect, header_h: u16) {
         Paragraph::new(lines).style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
         pa,
     );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+//  MINI CONSOLE — Shows git command output
+// ═════════════════════════════════════════════════════════════════════════
+
+fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
+    // Console takes bottom 35% of screen, max 20 lines
+    let ch = (area.height * 35 / 100).min(20).max(6);
+    let cw = (area.width * 80 / 100).min(100);
+    let cx = (area.width.saturating_sub(cw)) / 2;
+    let cy = area.height.saturating_sub(ch + 1);
+    let car = Rect { x: cx, y: cy, width: cw, height: ch + 1 };
+
+    // Fill with background
+    f.render_widget(
+        Paragraph::new(" ".repeat(car.width as usize))
+            .style(Style::default().bg(s.theme.background)),
+        car,
+    );
+
+    // Solid border (matching main UI style)
+    draw_solid_border(f, car, &s.theme);
+
+    // Title bar
+    let title = if s.console_running {
+        " ⏳ Console (running...) Esc=close ↑↓=scroll "
+    } else {
+        " ⏹ Console Esc=close ↑↓=scroll "
+    };
+    let tw = title.chars().count() as u16;
+    if tw < car.width.saturating_sub(2) {
+        let tx = car.x + (car.width - tw) / 2;
+        f.render_widget(
+            Paragraph::new(title).style(
+                Style::default()
+                    .fg(s.theme.background)
+                    .bg(s.theme.primary)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Rect { x: tx, y: car.y, width: tw, height: 1 },
+        );
+    }
+
+    // Content area
+    let inner = Rect {
+        x: car.x + 1,
+        y: car.y + 1,
+        width: car.width.saturating_sub(2),
+        height: car.height.saturating_sub(2),
+    };
+
+    if s.console_output.is_empty() {
+        f.render_widget(
+            Paragraph::new("(no output)")
+                .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+            inner,
+        );
+        return;
+    }
+
+    // Split output into lines and apply scroll
+    let all_lines: Vec<&str> = s.console_output.split('\n').collect();
+    let visible_h = inner.height as usize;
+    let max_scroll = all_lines.len().saturating_sub(visible_h);
+    if s.console_scroll > max_scroll {
+        s.console_scroll = max_scroll;
+    }
+
+    let visible: Vec<&str> = all_lines
+        .iter()
+        .skip(s.console_scroll)
+        .take(visible_h)
+        .copied()
+        .collect();
+
+    let styled: Vec<Line> = visible
+        .iter()
+        .map(|line| {
+            if line.starts_with('$') {
+                Line::from(Span::styled(
+                    *line,
+                    Style::default()
+                        .fg(s.theme.accent)
+                        .bg(s.theme.background)
+                        .add_modifier(Modifier::BOLD),
+                ))
+            } else if line.starts_with("✓") {
+                Line::from(Span::styled(
+                    *line,
+                    Style::default()
+                        .fg(s.theme.success)
+                        .bg(s.theme.background)
+                        .add_modifier(Modifier::BOLD),
+                ))
+            } else if line.starts_with("error:") || line.starts_with("fatal:") || line.starts_with("Error") {
+                Line::from(Span::styled(
+                    *line,
+                    Style::default().fg(s.theme.warning).bg(s.theme.background),
+                ))
+            } else {
+                Line::from(Span::styled(
+                    *line,
+                    Style::default().fg(s.theme.foreground).bg(s.theme.background),
+                ))
+            }
+        })
+        .collect();
+
+    f.render_widget(Paragraph::new(styled), inner);
 }

@@ -20,6 +20,30 @@ pub fn handle_key_event(code: KeyCode, s: &mut AppState) -> bool {
         return true;
     }
 
+    // ── Mini Console ─────────────────────────────────────────────
+    if s.console_visible {
+        match code {
+            KeyCode::Esc => { s.console_visible = false; return true; }
+            KeyCode::Up | KeyCode::Char('k') => {
+                s.console_scroll = s.console_scroll.saturating_sub(1);
+                return true;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                s.console_scroll += 1;
+                return true;
+            }
+            KeyCode::PageUp => {
+                s.console_scroll = s.console_scroll.saturating_sub(10);
+                return true;
+            }
+            KeyCode::PageDown => {
+                s.console_scroll += 10;
+                return true;
+            }
+            _ => {} // allow other keys to fall through and close modals etc.
+        }
+    }
+
     // ── Help Modal ───────────────────────────────────────────────
     if s.show_help_modal {
         s.show_help_modal = false;
