@@ -17,7 +17,7 @@ pub use rendering::draw_ui;
 pub use events::{handle_key_event, handle_mouse_click, handle_mouse_scroll};
 
 use std::io;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind},
@@ -46,15 +46,22 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
     if debug { crate::log_debug(&format!("TUI: AppState created, is_git_repo={}, files={}, commits={}", state.is_git_repo, state.files.len(), state.commits.len())); }
 
     let mut frame_count: u64 = 0;
-    
+    let mut last_check = Instant::now();
+
     loop {
         frame_count += 1;
-        
+
         if debug && frame_count == 1 { crate::log_debug("TUI: First draw starting"); }
         terminal.draw(|f| {
             draw_ui(f, &mut state);
         })?;
         if debug && frame_count == 1 { crate::log_debug("TUI: First draw completed"); }
+
+        // Periodic git change detection (every 2 seconds)
+        if last_check.elapsed() >= Duration::from_secs(2) {
+            state.check_git_changes();
+            last_check = Instant::now();
+        }
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {

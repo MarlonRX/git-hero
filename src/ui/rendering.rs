@@ -923,8 +923,15 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             let actual_idx = s.commits.iter().position(|commit| commit.hash == c.hash).unwrap_or(i);
             let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
             let mut subj = c.subject.clone();
-            let sw = right.width.saturating_sub(30) as usize;
+            let sw = right.width.saturating_sub(36) as usize;
             if subj.len() > sw.max(5) { subj = format!("{}...", &subj[..sw.max(5) - 3]); }
+
+            let push_icon = if c.pushed { "\u{2713}" } else { "\u{21C8}" };
+            let push_style = if c.pushed {
+                Style::default().fg(s.theme.success)
+            } else {
+                Style::default().fg(s.theme.warning).add_modifier(Modifier::BOLD)
+            };
 
             let item_s = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
                 Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
@@ -937,6 +944,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
                     Span::raw(format!("{}{}", pre, c.hash)),
                     Span::raw(format!("  ({})", c.date)),
                     Span::raw(format!("  {}", subj)),
+                    Span::raw(format!("  {}", push_icon)),
                 ])
             } else {
                 Line::from(vec![
@@ -944,6 +952,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
                     Span::styled(&c.hash, Style::default().fg(s.theme.accent)),
                     Span::styled(format!("  ({})", c.date), Style::default().fg(s.theme.dimmed)),
                     Span::raw(format!("  {}", subj)),
+                    Span::styled(format!("  {}", push_icon), push_style),
                 ])
             };
             ListItem::new(line).style(item_s)
@@ -989,17 +998,20 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
     let cy = area.height.saturating_sub(ch + 1);
     let car = Rect { x: cx, y: cy, width: cw, height: ch + 1 };
 
-    // Fill with background
-    f.render_widget(
-        Paragraph::new(" ".repeat(car.width as usize))
-            .style(Style::default().bg(s.theme.background)),
-        car,
-    );
+    // Fill entire console area with solid surface color (not transparent)
+    let fill_bg = s.theme.surface;
+    for row in car.y..car.y + car.height {
+        f.render_widget(
+            Paragraph::new(" ".repeat(car.width as usize))
+                .style(Style::default().bg(fill_bg)),
+            Rect { x: car.x, y: row, width: car.width, height: 1 },
+        );
+    }
 
     // Solid border (matching main UI style)
     draw_solid_border(f, car, &s.theme);
 
-    // Title bar
+    // Title bar on top border
     let title = if s.console_running {
         " ⏳ Console (running...) Esc=close ↑↓=scroll "
     } else {
@@ -1011,7 +1023,7 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
         f.render_widget(
             Paragraph::new(title).style(
                 Style::default()
-                    .fg(s.theme.background)
+                    .fg(fill_bg)
                     .bg(s.theme.primary)
                     .add_modifier(Modifier::BOLD),
             ),
@@ -1019,7 +1031,7 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
         );
     }
 
-    // Content area
+    // Content area (inside border)
     let inner = Rect {
         x: car.x + 1,
         y: car.y + 1,
@@ -1030,7 +1042,7 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
     if s.console_output.is_empty() {
         f.render_widget(
             Paragraph::new("(no output)")
-                .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+                .style(Style::default().fg(s.theme.dimmed).bg(fill_bg)),
             inner,
         );
         return;
@@ -1059,7 +1071,7 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
                     *line,
                     Style::default()
                         .fg(s.theme.accent)
-                        .bg(s.theme.background)
+                        .bg(fill_bg)
                         .add_modifier(Modifier::BOLD),
                 ))
             } else if line.starts_with("✓") {
@@ -1067,18 +1079,18 @@ fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
                     *line,
                     Style::default()
                         .fg(s.theme.success)
-                        .bg(s.theme.background)
+                        .bg(fill_bg)
                         .add_modifier(Modifier::BOLD),
                 ))
             } else if line.starts_with("error:") || line.starts_with("fatal:") || line.starts_with("Error") {
                 Line::from(Span::styled(
                     *line,
-                    Style::default().fg(s.theme.warning).bg(s.theme.background),
+                    Style::default().fg(s.theme.warning).bg(fill_bg),
                 ))
             } else {
                 Line::from(Span::styled(
                     *line,
-                    Style::default().fg(s.theme.foreground).bg(s.theme.background),
+                    Style::default().fg(s.theme.foreground).bg(fill_bg),
                 ))
             }
         })

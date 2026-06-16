@@ -2,6 +2,7 @@
 // Data models and business logic for the Git Hero TUI
 
 use std::fs;
+use std::time::SystemTime;
 
 use crate::config::{load_config, Config};
 use crate::git;
@@ -20,6 +21,7 @@ pub struct GitCommit {
     pub hash: String,
     pub date: String,
     pub subject: String,
+    pub pushed: bool,
 }
 
 pub struct AppState {
@@ -77,6 +79,9 @@ pub struct AppState {
     pub console_visible: bool,
     pub console_scroll: usize,
     pub console_running: bool,
+
+    // ── Auto-refresh ───────────────────────────────────────────────
+    pub last_git_mtime: Option<SystemTime>,
 
     // ── Wizards ────────────────────────────────────────────────────
     pub setup_step: usize,
@@ -143,6 +148,7 @@ impl AppState {
             console_visible: false,
             console_scroll: 0,
             console_running: false,
+            last_git_mtime: None,
             setup_step: 0,
             setup_cursor: 0,
             init_wizard_active: false,
@@ -192,6 +198,28 @@ impl AppState {
         }
     }
 
+    /// Check if .git has changed since last check. If so, refresh the UI.
+    /// Safe to call on every frame — only refreshes when actually needed.
+    pub fn check_git_changes(&mut self) {
+        if !self.is_git_repo {
+            return;
+        }
+        let git_index = std::path::Path::new(".git/index");
+        if let Ok(meta) = std::fs::metadata(git_index) {
+            if let Ok(mtime) = meta.modified() {
+                match self.last_git_mtime {
+                    Some(prev) if prev == mtime => {
+                        // No changes
+                    }
+                    _ => {
+                        self.last_git_mtime = Some(mtime);
+                        self.refresh_git_status();
+                    }
+                }
+            }
+        }
+    }
+
     // ── Git operations ──────────────────────────────────────────
 
     fn get_changed_files(&self) -> Vec<GitFile> {
@@ -234,16 +262,36 @@ impl AppState {
 
     fn get_recent_commits(&self) -> Vec<GitCommit> {
         let mut commits = Vec::new();
+
+        // Get unpushed commit hashes (commits ahead of upstream)
+        let remote = &self.remote;
+        let branch = &self.branch;
+        let mut unpushed: Vec<String> = Vec::new();
+        if !remote.is_empty() && !branch.is_empty() {
+            if let Ok(out) = git::run_git(&[
+                "log", "--oneline", &format!("{}/{}..HEAD", remote, branch),
+            ]) {
+                for line in out.split('\n') {
+                    if let Some(hash) = line.split(' ').next() {
+                        unpushed.push(hash.to_string());
+                    }
+                }
+            }
+        }
+
         if let Ok(out) =
             git::run_git(&["log", "-n", "15", "--pretty=format:%h|%ar|%an|%s"])
         {
             for line in out.split('\n') {
                 let parts: Vec<&str> = line.split('|').collect();
                 if parts.len() >= 4 {
+                    let hash = parts[0].to_string();
+                    let pushed = !unpushed.contains(&hash);
                     commits.push(GitCommit {
-                        hash: parts[0].to_string(),
+                        hash,
                         date: parts[1].to_string(),
                         subject: parts[3].to_string(),
+                        pushed,
                     });
                 }
             }
