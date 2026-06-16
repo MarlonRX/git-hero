@@ -5,7 +5,7 @@
 # ============================================================================
 set -euo pipefail
 
-REPO="your-username/git-hero"
+REPO="MarlonRX/git-hero"
 TAP_DIR="homebrew-tap"
 FORMULA="$TAP_DIR/git-hero.rb"
 

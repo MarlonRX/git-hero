@@ -4,8 +4,12 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/MarlonRX/git-hero/main/scripts/install.sh | bash
 #
 # Or locally: ./scripts/install.sh [version]
+#
+# Strategy:
+#   1. Try to install from prebuilt release binary (fast)
+#   2. Fall back to `cargo install` (slower but always works)
 
-set -euo pipefail
+set -u  # NOT -e: we handle errors explicitly
 
 VERSION="${1:-latest}"
 BINARY="git-hero"
@@ -15,8 +19,9 @@ INSTALL_DIR="${HOME}/.local/bin"
 # ── Colors ────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${CYAN}══════════════════════════════════════════════${NC}"
 echo -e "${CYAN}  Git Hero Installer${NC}"
@@ -38,7 +43,7 @@ case "${OS}" in
 esac
 
 case "${ARCH}" in
-    x86_64)     ARCH_NAME="x86_64" ;;
+    x86_64)       ARCH_NAME="x86_64" ;;
     arm64|aarch64) ARCH_NAME="arm64" ;;
     *)
         echo -e "${RED}❌ Unsupported architecture: ${ARCH}${NC}"
@@ -46,83 +51,137 @@ case "${ARCH}" in
         ;;
 esac
 
-# ── Determine version ────────────────────────────────────────────────
-if [ "${VERSION}" = "latest" ]; then
-    echo "🔍 Fetching latest version..."
-    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | \
-        grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
-    
-    if [ -z "${VERSION}" ]; then
-        echo -e "${RED}❌ Could not determine latest version.${NC}"
-        echo "   Specify a version: ./install.sh 0.1.0"
-        exit 1
-    fi
-fi
-
-echo "📦 Version: v${VERSION}"
 echo "💻 Platform: ${PLATFORM}-${ARCH_NAME}"
 echo ""
 
-# ── Create install directory ─────────────────────────────────────────
-mkdir -p "${INSTALL_DIR}"
+# ── Helper functions ─────────────────────────────────────────────────
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-# ── Download ─────────────────────────────────────────────────────────
-ARCHIVE_NAME="${BINARY}-v${VERSION}-${PLATFORM}-${ARCH_NAME}"
-EXT="tar.gz"
-[ "${PLATFORM}" = "linux" ] && EXT="tar.xz"
+curl_get() {
+    # curl_get <url> <output_file>
+    # Returns 0 on success, 1 on failure (no -f flag, no exit on error)
+    curl -fsSL --max-time 30 "$1" -o "$2" 2>/dev/null
+}
 
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ARCHIVE_NAME}.${EXT}"
-CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+# ── Try prebuilt release ─────────────────────────────────────────────
+install_from_release() {
+    local version="$1"
 
-echo "⬇️  Downloading ${ARCHIVE_NAME}.${EXT}..."
-TEMP_DIR="$(mktemp -d)"
-curl -fsSL "${DOWNLOAD_URL}" -o "${TEMP_DIR}/${ARCHIVE_NAME}.${EXT}"
+    # If version is "latest", try to fetch it from the API
+    if [ "${version}" = "latest" ]; then
+        echo "🔍 Fetching latest version from GitHub..."
+        local api_resp
+        api_resp=$(curl -fsSL --max-time 15 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null) || true
 
-# ── Verify checksum (optional, non-fatal) ────────────────────────────
-echo "🔐 Verifying checksum..."
-if curl -fsSL "${CHECKSUM_URL}" -o "${TEMP_DIR}/checksum.txt" 2>/dev/null; then
-    (cd "${TEMP_DIR}" && shasum -a 256 -c checksum.txt 2>/dev/null) || \
-        echo -e "${RED}⚠️  Checksum verification failed. Proceeding anyway...${NC}"
-else
-    echo "⚠️  Could not download checksum. Skipping verification."
-fi
+        if [ -n "${api_resp}" ]; then
+            version=$(echo "${api_resp}" | grep '"tag_name":' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')
+        fi
 
-# ── Extract ──────────────────────────────────────────────────────────
-echo "📂 Extracting..."
-if [ "${EXT}" = "tar.gz" ]; then
-    tar -xzf "${TEMP_DIR}/${ARCHIVE_NAME}.${EXT}" -C "${TEMP_DIR}"
-else
-    tar -xJf "${TEMP_DIR}/${ARCHIVE_NAME}.${EXT}" -C "${TEMP_DIR}"
-fi
-
-# ── Install ──────────────────────────────────────────────────────────
-echo "📥 Installing to ${INSTALL_DIR}/${BINARY}..."
-cp "${TEMP_DIR}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
-chmod +x "${INSTALL_DIR}/${BINARY}"
-
-# ── Cleanup ──────────────────────────────────────────────────────────
-rm -rf "${TEMP_DIR}"
-
-# ── Verify installation ──────────────────────────────────────────────
-if command -v "${INSTALL_DIR}/${BINARY}" >/dev/null 2>&1; then
-    echo ""
-    echo -e "${GREEN}══════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  ✅ Git Hero v${VERSION} installed successfully!${NC}"
-    echo -e "${GREEN}══════════════════════════════════════════════${NC}"
-    echo ""
-    echo "  Binary: ${INSTALL_DIR}/${BINARY}"
-    echo ""
-    
-    # Check if install dir is in PATH
-    if ! echo "${PATH}" | grep -q "${INSTALL_DIR}"; then
-        echo -e "${CYAN}💡 Add ${INSTALL_DIR} to your PATH:${NC}"
-        echo "   echo 'export PATH=\"\${HOME}/.local/bin:\${PATH}\"' >> ~/.zshrc"
-        echo "   source ~/.zshrc"
-        echo ""
+        if [ -z "${version}" ] || [ "${version}" = "latest" ]; then
+            echo -e "${YELLOW}⚠️  Could not determine latest version (GitHub API rate limit or no releases).${NC}"
+            echo -e "   Falling back to: ${GREEN}cargo install${NC}"
+            return 1
+        fi
     fi
-    
-    echo "  Run: git-hero"
+
+    echo "📦 Version: v${version}"
+
+    local archive_name="${BINARY}-v${version}-${PLATFORM}-${ARCH_NAME}"
+    local ext="tar.gz"
+    [ "${PLATFORM}" = "linux" ] && ext="tar.xz"
+
+    local download_url="https://github.com/${REPO}/releases/download/v${version}/${archive_name}.${ext}"
+    local temp_dir
+    temp_dir=$(mktemp -d)
+
+    echo "⬇️  Downloading ${archive_name}.${ext}..."
+    if ! curl_get "${download_url}" "${temp_dir}/${archive_name}.${ext}"; then
+        echo -e "${YELLOW}⚠️  Release binary not found (${version} for ${PLATFORM}-${ARCH_NAME}).${NC}"
+        echo -e "   Falling back to: ${GREEN}cargo install${NC}"
+        rm -rf "${temp_dir}"
+        return 1
+    fi
+
+    # Optional checksum verification
+    local checksum_url="${download_url}.sha256"
+    if curl_get "${checksum_url}" "${temp_dir}/checksum.txt"; then
+        if (cd "${temp_dir}" && shasum -a 256 -c checksum.txt >/dev/null 2>&1); then
+            echo "🔐 Checksum OK"
+        else
+            echo -e "${YELLOW}⚠️  Checksum verification failed. Proceeding anyway...${NC}"
+        fi
+    fi
+
+    # Extract
+    echo "📂 Extracting..."
+    if [ "${ext}" = "tar.gz" ]; then
+        tar -xzf "${temp_dir}/${archive_name}.${ext}" -C "${temp_dir}" || { rm -rf "${temp_dir}"; return 1; }
+    else
+        tar -xJf "${temp_dir}/${archive_name}.${ext}" -C "${temp_dir}" || { rm -rf "${temp_dir}"; return 1; }
+    fi
+
+    if [ ! -f "${temp_dir}/${BINARY}" ]; then
+        echo -e "${RED}❌ Binary not found in archive.${NC}"
+        rm -rf "${temp_dir}"
+        return 1
+    fi
+
+    # Install
+    mkdir -p "${INSTALL_DIR}"
+    echo "📥 Installing to ${INSTALL_DIR}/${BINARY}..."
+    cp "${temp_dir}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    chmod +x "${INSTALL_DIR}/${BINARY}"
+    rm -rf "${temp_dir}"
+
+    return 0
+}
+
+# ── Fallback: cargo install ──────────────────────────────────────────
+install_via_cargo() {
+    if ! have_cmd cargo; then
+        echo -e "${RED}❌ Rust/cargo not installed.${NC}"
+        echo "   Install Rust: https://rustup.rs/"
+        echo "   Or download a release binary manually from:"
+        echo "   https://github.com/${REPO}/releases"
+        exit 1
+    fi
+
+    echo "🔨 Installing via cargo (this may take a few minutes)..."
+    cargo install "${BINARY}" --root "${HOME}/.local"
+}
+
+# ── Main install flow ─────────────────────────────────────────────────
+if install_from_release "${VERSION}"; then
+    :
 else
-    echo -e "${RED}❌ Installation failed.${NC}"
-    exit 1
+    echo ""
+    install_via_cargo
+fi
+
+# ── Verify and report ────────────────────────────────────────────────
+echo ""
+echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+if have_cmd "${BINARY}"; then
+    echo -e "${GREEN}  ✅ Git Hero installed successfully!${NC}"
+    echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+    echo ""
+    echo "  Run: ${GREEN}${BINARY}${NC}"
+else
+    if [ -x "${INSTALL_DIR}/${BINARY}" ]; then
+        echo -e "${GREEN}  ✅ Git Hero installed at ${INSTALL_DIR}/${BINARY}${NC}"
+        echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+        echo ""
+        if ! echo "${PATH}" | grep -q "${INSTALL_DIR}"; then
+            echo -e "${YELLOW}💡 Add ${INSTALL_DIR} to your PATH:${NC}"
+            echo "   echo 'export PATH=\"\${HOME}/.local/bin:\${PATH}\"' >> ~/.zshrc"
+            echo "   source ~/.zshrc"
+            echo ""
+        fi
+        echo "  Run: ${BINARY}"
+    else
+        echo -e "${RED}  ❌ Installation may have failed.${NC}"
+        echo -e "${CYAN}══════════════════════════════════════════════${NC}"
+        echo "  Check the output above for errors."
+        exit 1
+    fi
 fi

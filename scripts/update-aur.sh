@@ -5,7 +5,7 @@
 # ============================================================================
 set -euo pipefail
 
-REPO="your-username/git-hero"
+REPO="MarlonRX/git-hero"
 AUR_DIR="aur"
 PKGBUILD="$AUR_DIR/PKGBUILD"
 
