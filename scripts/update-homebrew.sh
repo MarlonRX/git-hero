@@ -1,17 +1,29 @@
 #!/bin/bash
 # ============================================================================
-# Update Homebrew Formula with SHA256
-# Calcula automáticamente el SHA256 del tarball y actualiza la fórmula
+# Git Hero - Update Homebrew Formula
+# Automatically calculates the SHA256 of the release tarball and updates
+# the formula with the correct URL and hash.
 # ============================================================================
 set -euo pipefail
+
+# ── Colors ───────────────────────────────────────────────────────────────
+BOLD='\033[1m'
+DIM='\033[2m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
 
 REPO="MarlonRX/git-hero"
 TAP_DIR="homebrew-tap"
 FORMULA="$TAP_DIR/git-hero.rb"
 
-echo "→ Calculando SHA256 del tarball de la release..."
+echo ""
+echo -e "${WHITE}${BOLD}Homebrew Formula Update${NC}"
+echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
 
-# Detectar última versión
+# Detect latest version
 if [ -d "$TAP_DIR/.git" ]; then
     cd "$TAP_DIR"
     latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
@@ -20,16 +32,16 @@ else
     latest_tag="v0.1.0"
 fi
 
-echo "  Versión detectada: $latest_tag"
+echo -e "  ${DIM}Version:${NC}  $latest_tag"
 tarball_url="https://github.com/$REPO/archive/refs/tags/$latest_tag.tar.gz"
 
-# Calcular SHA256
-echo "  Descargando $tarball_url ..."
+# Calculate SHA256
+echo -e "  ${DIM}Downloading tarball...${NC}"
 sha256=$(curl -sL "$tarball_url" | shasum -a 256 | cut -d' ' -f1)
-echo "  SHA256: $sha256"
+echo -e "  ${DIM}SHA256:${NC}   ${CYAN}${sha256}${NC}"
 
-# Actualizar fórmula
-echo "→ Actualizando $FORMULA ..."
+# Update formula
+echo -e "  ${DIM}Updating ${FORMULA}...${NC}"
 version="${latest_tag#v}"
 sed -i.bak \
     -e "s|url \".*\"|url \"https://github.com/$REPO/archive/refs/tags/$latest_tag.tar.gz\"|" \
@@ -39,10 +51,12 @@ sed -i.bak \
 
 rm -f "$FORMULA.bak"
 
-echo "✓ Fórmula actualizada"
 echo ""
-echo "Próximos pasos:"
-echo "  1. cd $TAP_DIR"
-echo "  2. git add git-hero.rb"
-echo "  3. git commit -m 'Update git-hero to $latest_tag'"
-echo "  4. git push"
+echo -e "  ${GREEN}✔${NC}  Formula updated"
+echo ""
+echo -e "  ${WHITE}${BOLD}Next steps:${NC}"
+echo -e "  ${DIM}1.${NC} ${CYAN}cd $TAP_DIR${NC}"
+echo -e "  ${DIM}2.${NC} ${CYAN}git add git-hero.rb${NC}"
+echo -e "  ${DIM}3.${NC} ${CYAN}git commit -m 'Update git-hero to $latest_tag'${NC}"
+echo -e "  ${DIM}4.${NC} ${CYAN}git push${NC}"
+echo ""

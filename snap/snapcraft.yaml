@@ -14,12 +14,10 @@ confinement: strict
 apps:
   git-hero:
     command: bin/git-hero
-    extensions: [gnome]
     plugs:
       - home
       - network
       - removable-media
-      - opengl
 
 parts:
   git-hero:
@@ -31,9 +29,3 @@ parts:
     override-build: |
       cargo build --release --locked
       install -Dm755 target/release/git-hero $CRAFT_PART_INSTALL/bin/git-hero
-
-layout:
-  /usr/share/bash-completion/completions:
-    bind: $SNAP/etc/bash_completion.d
-  /etc/bash_completion.d:
-    bind: $SNAP_DATA/etc/bash_completion.d

@@ -1,17 +1,29 @@
 #!/bin/bash
 # ============================================================================
-# Update AUR PKGBUILD with SHA256
-# Calcula automáticamente el SHA256 del tarball y actualiza el PKGBUILD
+# Git Hero - Update AUR PKGBUILD
+# Automatically calculates the SHA256 of the release tarball and updates
+# the PKGBUILD with the correct version and hash.
 # ============================================================================
 set -euo pipefail
+
+# ── Colors ───────────────────────────────────────────────────────────────
+BOLD='\033[1m'
+DIM='\033[2m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
 
 REPO="MarlonRX/git-hero"
 AUR_DIR="aur"
 PKGBUILD="$AUR_DIR/PKGBUILD"
 
-echo "→ Calculando SHA256 para AUR..."
+echo ""
+echo -e "${WHITE}${BOLD}AUR PKGBUILD Update${NC}"
+echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
 
-# Detectar última versión
+# Detect latest version
 if [ -d "$AUR_DIR/.git" ]; then
     cd "$AUR_DIR"
     latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
@@ -20,16 +32,16 @@ else
     latest_tag="v0.1.0"
 fi
 
-echo "  Versión detectada: $latest_tag"
+echo -e "  ${DIM}Version:${NC}  $latest_tag"
 tarball_url="https://github.com/$REPO/archive/refs/tags/$latest_tag.tar.gz"
 
-# Calcular SHA256
-echo "  Descargando $tarball_url ..."
+# Calculate SHA256
+echo -e "  ${DIM}Downloading tarball...${NC}"
 sha256=$(curl -sL "$tarball_url" | shasum -a 256 | cut -d' ' -f1)
-echo "  SHA256: $sha256"
+echo -e "  ${DIM}SHA256:${NC}   ${CYAN}${sha256}${NC}"
 
-# Actualizar PKGBUILD
-echo "→ Actualizando $PKGBUILD ..."
+# Update PKGBUILD
+echo -e "  ${DIM}Updating ${PKGBUILD}...${NC}"
 version="${latest_tag#v}"
 sed -i.bak \
     -e "s|^pkgver=.*|pkgver=$version|" \
@@ -38,14 +50,15 @@ sed -i.bak \
 
 rm -f "$PKGBUILD.bak"
 
-echo "✓ PKGBUILD actualizado"
 echo ""
-echo "Para verificar:"
-echo "  cd $AUR_DIR"
-echo "  makepkg -si"
+echo -e "  ${GREEN}✔${NC}  PKGBUILD updated"
 echo ""
-echo "Para subir a AUR:"
-echo "  cd $AUR_DIR"
-echo "  git add PKGBUILD .SRCINFO"
-echo "  git commit -m 'Update to $latest_tag'"
-echo "  git push"
+echo -e "  ${WHITE}${BOLD}To verify:${NC}"
+echo -e "  ${DIM}\$${NC} ${CYAN}cd $AUR_DIR && makepkg -si${NC}"
+echo ""
+echo -e "  ${WHITE}${BOLD}To publish to AUR:${NC}"
+echo -e "  ${DIM}1.${NC} ${CYAN}cd $AUR_DIR${NC}"
+echo -e "  ${DIM}2.${NC} ${CYAN}git add PKGBUILD .SRCINFO${NC}"
+echo -e "  ${DIM}3.${NC} ${CYAN}git commit -m 'Update to $latest_tag'${NC}"
+echo -e "  ${DIM}4.${NC} ${CYAN}git push${NC}"
+echo ""

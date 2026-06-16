@@ -1,36 +1,53 @@
 #!/bin/bash
 # ============================================================================
 # Git Hero - Release Script
-# Compila binarios para múltiples plataformas y crea releases
+# Compiles binaries for multiple platforms and creates release artifacts
 # ============================================================================
 set -euo pipefail
 
-# ── Configuración ─────────────────────────────────────────────────────────
+# ── Colors & Styles ──────────────────────────────────────────────────────
+BOLD='\033[1m'
+DIM='\033[2m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+
+# ── Configuration ────────────────────────────────────────────────────────
 APP_NAME="git-hero"
 VERSION="${1:-$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)}"
 RELEASE_DIR="target/release-artifacts"
 BINARY_NAME="$APP_NAME"
 
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║         git-hero Release Builder v${VERSION}                ║"
-echo "╚════════════════════════════════════════════════════════════╝"
+# ── Banner ───────────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║                                                      ║"
+printf "  ║   Git Hero · Release Builder v%-23s ║\n" "${VERSION}"
+echo "  ║                                                      ║"
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo -ne "${NC}"
 echo ""
 
-# ── Verificar versión ────────────────────────────────────────────────────
+# ── Verify version ──────────────────────────────────────────────────────
 if [ -z "$VERSION" ]; then
-    echo "✗ Error: no se pudo determinar la versión"
-    echo "  Uso: $0 [version]"
-    echo "  Ejemplo: $0 0.1.0"
+    echo -e "  ${RED}✘  Error: could not determine version${NC}"
+    echo -e "     Usage: $0 [version]"
+    echo -e "     Example: $0 0.1.0"
     exit 1
 fi
 
-# ── Limpiar builds anteriores ────────────────────────────────────────────
-echo "→ Limpiando builds anteriores..."
+# ── Clean previous builds ───────────────────────────────────────────────
+echo -e "  ${DIM}Cleaning previous builds...${NC}"
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 cargo clean 2>/dev/null || true
 
-# ── Targets a compilar ───────────────────────────────────────────────────
+# ── Targets to compile ──────────────────────────────────────────────────
 TARGETS=(
     "x86_64-unknown-linux-gnu:linux:x86_64:gnu"
     "x86_64-unknown-linux-musl:linux:x86_64:musl"
@@ -40,29 +57,37 @@ TARGETS=(
     "x86_64-pc-windows-msvc:windows:x86_64:msvc.exe"
 )
 
-# ── Compilar para cada target ────────────────────────────────────────────
+total=${#TARGETS[@]}
+current=0
+
+echo ""
+echo -e "  ${WHITE}${BOLD}Building for ${total} targets${NC}"
+echo -e "  ${DIM}$(printf '%.0s─' {1..50})${NC}"
+
+# ── Compile for each target ──────────────────────────────────────────────
 for target_info in "${TARGETS[@]}"; do
     IFS=':' read -ra parts <<< "$target_info"
     target="${parts[0]}"
     os="${parts[1]}"
     arch="${parts[2]}"
     suffix="${parts[3]}"
+    current=$((current + 1))
 
     echo ""
-    echo "→ Compilando para $os ($arch) [$target]..."
+    echo -e "  ${BLUE}${BOLD}[${current}/${total}]${NC} ${WHITE}${os} (${arch})${NC} ${DIM}${target}${NC}"
 
-    # Verificar si el target está instalado
+    # Check if target is installed
     if ! rustup target list --installed | grep -q "$target"; then
-        echo "  ⚠ Instalando target $target..."
+        echo -e "       Installing target..."
         rustup target add "$target" 2>/dev/null || {
-            echo "  ✗ No se pudo instalar target $target, saltando..."
+            echo -e "  ${YELLOW}⚠${NC}  Could not install target, skipping"
             continue
         }
     fi
 
-    # Compilar
+    # Compile
     if cargo build --release --target "$target" 2>/dev/null; then
-        # Determinar extensión del binario
+        # Determine binary extension
         if [[ "$target" == *"windows"* ]]; then
             binary_ext=".exe"
         else
@@ -71,60 +96,71 @@ for target_info in "${TARGETS[@]}"; do
 
         binary_path="target/$target/release/${BINARY_NAME}${binary_ext}"
         if [ -f "$binary_path" ]; then
-            # Crear directorio de release
+            # Create release directory
             artifact_dir="$RELEASE_DIR/${APP_NAME}-${VERSION}-${os}-${arch}"
             mkdir -p "$artifact_dir"
 
-            # Copiar binario
+            # Copy binary
             cp "$binary_path" "$artifact_dir/${BINARY_NAME}${binary_ext}"
             chmod +x "$artifact_dir/${BINARY_NAME}${binary_ext}"
 
-            # Copiar documentación
+            # Copy documentation
             cp README.md "$artifact_dir/"
             cp LICENSE "$artifact_dir/" 2>/dev/null || true
 
-            # Crear archivo comprimido
+            # Create compressed archive
             cd "$RELEASE_DIR"
             if [[ "$target" == *"windows"* ]]; then
                 zip -qr "${artifact_dir}.zip" "${artifact_dir##*/}"
-                echo "  ✓ Creado: ${artifact_dir##*/}.zip"
+                echo -e "  ${GREEN}✔${NC}  ${artifact_dir##*/}.zip"
             else
                 tar -czf "${artifact_dir}.tar.gz" "${artifact_dir##*/}"
-                echo "  ✓ Creado: ${artifact_dir##*/}.tar.gz"
+                echo -e "  ${GREEN}✔${NC}  ${artifact_dir##*/}.tar.gz"
             fi
             cd - > /dev/null
         else
-            echo "  ✗ Binario no encontrado: $binary_path"
+            echo -e "  ${RED}✘${NC}  Binary not found: $binary_path"
         fi
     else
-        echo "  ✗ Error compilando para $target"
+        echo -e "  ${RED}✘${NC}  Compilation failed for $target"
     fi
 done
 
-# ── Generar checksums ────────────────────────────────────────────────────
+# ── Generate checksums ──────────────────────────────────────────────────
 echo ""
-echo "→ Generando checksums..."
+echo -e "  ${WHITE}${BOLD}Generating checksums${NC}"
+echo -e "  ${DIM}$(printf '%.0s─' {1..50})${NC}"
 cd "$RELEASE_DIR"
 for file in *.tar.gz *.zip; do
     if [ -f "$file" ]; then
         shasum -a 256 "$file" >> checksums.txt
     fi
 done
-cat checksums.txt
+echo ""
+cat checksums.txt | while read -r line; do
+    echo -e "  ${DIM}${line}${NC}"
+done
 cd - > /dev/null
 
-# ── Resumen ──────────────────────────────────────────────────────────────
+# ── Summary ─────────────────────────────────────────────────────────────
 echo ""
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                    Build completo                           ║"
-echo "╚════════════════════════════════════════════════════════════╝"
+echo -e "${GREEN}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║                                                      ║"
+echo "  ║          ✔  Release build complete                   ║"
+echo "  ║                                                      ║"
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo -ne "${NC}"
 echo ""
-echo "Artefactos generados en: $RELEASE_DIR/"
-ls -lh "$RELEASE_DIR"/ | grep -E '\.(tar\.gz|zip|txt)$' || true
+echo -e "  ${DIM}Artifacts:${NC}  $RELEASE_DIR/"
+ls -lh "$RELEASE_DIR"/ | grep -E '\.(tar\.gz|zip|txt)$' | while read -r line; do
+    echo -e "  ${DIM}  ${line}${NC}"
+done || true
 echo ""
-echo "Próximos pasos:"
-echo "  1. Crear tag: git tag -a v$VERSION -m 'Release v$VERSION'"
-echo "  2. Push tag: git push origin v$VERSION"
-echo "  3. Crear release en GitHub: gh release create v$VERSION $RELEASE_DIR/*"
-echo "  4. Publicar en crates.io: cargo publish"
-echo "  5. Actualizar Homebrew tap con el SHA256"
+echo -e "  ${WHITE}${BOLD}Next steps:${NC}"
+echo -e "  ${DIM}1.${NC} Create tag:    ${CYAN}git tag -a v$VERSION -m 'Release v$VERSION'${NC}"
+echo -e "  ${DIM}2.${NC} Push tag:      ${CYAN}git push origin v$VERSION${NC}"
+echo -e "  ${DIM}3.${NC} GitHub release: ${CYAN}gh release create v$VERSION $RELEASE_DIR/*${NC}"
+echo -e "  ${DIM}4.${NC} crates.io:     ${CYAN}cargo publish${NC}"
+echo -e "  ${DIM}5.${NC} Homebrew:       Update tap with SHA256"
+echo ""

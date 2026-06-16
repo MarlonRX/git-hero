@@ -1,17 +1,17 @@
-# Maintainer: Your Name <your.email@example.com>
+# Maintainer: Marlon Ramirez <mramirezce14@gmail.com>
 pkgname=git-hero
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Fast and visual TUI for managing Git, written in Rust with Ratatui"
 arch=('x86_64' 'aarch64')
-url="https://github.com/your-username/git-hero"
+url="https://github.com/MarlonRX/git-hero"
 license=('MIT')
 depends=('git')
 makedepends=('cargo' 'rust')
 optdepends=()
 provides=('git-hero')
 conflicts=('git-hero')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/your-username/git-hero/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/MarlonRX/git-hero/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('REPLACE_WITH_ACTUAL_SHA256')
 
 prepare() {

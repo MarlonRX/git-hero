@@ -1,39 +1,58 @@
 #!/usr/bin/env bash
 # ── Git Hero Release Builder ──────────────────────────────────────────
-# Builds optimized release binaries for multiple platforms
+# Builds optimized release binaries for the current platform
 # Usage: ./scripts/build-release.sh [version]
 # Example: ./scripts/build-release.sh 0.1.0
 #
 # Prerequisites:
 #   - Rust toolchain (rustup)
-#   - Cross-compilation targets (added automatically)
 
 set -euo pipefail
+
+# ── Colors & Styles ──────────────────────────────────────────────────
+BOLD='\033[1m'
+DIM='\033[2m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+RED='\033[0;31m'
+NC='\033[0m'
 
 VERSION="${1:-$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)}"
 BINARY="git-hero"
 RELEASE_DIR="target/releases/${VERSION}"
 DIST_DIR="target/dist/${VERSION}"
 
-echo "══════════════════════════════════════════════"
-echo "  Git Hero Release Builder v${VERSION}"
-echo "══════════════════════════════════════════════"
+# ── Banner ───────────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║                                                      ║"
+printf "  ║   Git Hero · Local Build v%-25s ║\n" "${VERSION}"
+echo "  ║                                                      ║"
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo -ne "${NC}"
 echo ""
 
-# ── Check prerequisites ──────────────────────────────────────────────
-command -v cargo >/dev/null 2>&1 || { echo "❌ cargo not found. Install Rust: https://rustup.rs"; exit 1; }
+# ── Check prerequisites ─────────────────────────────────────────────
+command -v cargo >/dev/null 2>&1 || {
+    echo -e "  ${RED}✘  cargo not found. Install Rust: https://rustup.rs${NC}"
+    exit 1
+}
 
-# ── Ensure release profile ───────────────────────────────────────────
-echo "⚡ Building release binary (optimized)..."
+# ── Build release binary ────────────────────────────────────────────
+echo -e "  ${WHITE}${BOLD}Building release binary (optimized)${NC}"
+echo -e "  ${DIM}$(printf '%.0s─' {1..50})${NC}"
 cargo build --release
-echo "✅ Release binary built: target/release/${BINARY}"
+echo -e "  ${GREEN}✔${NC}  Release binary: ${DIM}target/release/${BINARY}${NC}"
 echo ""
 
-# ── Create distribution directory ────────────────────────────────────
+# ── Create distribution directory ───────────────────────────────────
 rm -rf "${DIST_DIR}"
 mkdir -p "${DIST_DIR}"
 
-# ── Platform detection ───────────────────────────────────────────────
+# ── Platform detection ──────────────────────────────────────────────
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
@@ -49,7 +68,7 @@ case "${ARCH}" in
     *)       ARCH_NAME="${ARCH}" ;;
 esac
 
-# ── Package binary ───────────────────────────────────────────────────
+# ── Package binary ──────────────────────────────────────────────────
 ARCHIVE_NAME="${BINARY}-v${VERSION}-${PLATFORM}-${ARCH_NAME}"
 
 if [ "${PLATFORM}" = "macos" ]; then
@@ -58,7 +77,9 @@ else
     TARBALL="${ARCHIVE_NAME}.tar.xz"
 fi
 
-echo "📦 Packaging: ${TARBALL}"
+echo -e "  ${WHITE}${BOLD}Packaging${NC}"
+echo -e "  ${DIM}$(printf '%.0s─' {1..50})${NC}"
+echo -e "  ${DIM}Archive:${NC} ${TARBALL}"
 
 # Create temp dir for packaging
 TEMP_DIR="$(mktemp -d)"
@@ -74,29 +95,32 @@ fi
 
 rm -rf "${TEMP_DIR}"
 
-# ── Generate checksums ───────────────────────────────────────────────
-echo "🔐 Generating checksums..."
+# ── Generate checksums ──────────────────────────────────────────────
+echo -e "  ${DIM}Checksum:${NC}"
 shasum -a 256 "${DIST_DIR}/${TARBALL}" > "${DIST_DIR}/${TARBALL}.sha256"
+echo -e "  ${DIM}$(cat "${DIST_DIR}/${TARBALL}.sha256")${NC}"
 
-# ── Summary ──────────────────────────────────────────────────────────
+# ── Summary ─────────────────────────────────────────────────────────
 echo ""
-echo "══════════════════════════════════════════════"
-echo "  Release ${VERSION} built successfully!"
-echo "══════════════════════════════════════════════"
+echo -e "${GREEN}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════╗"
+echo "  ║                                                      ║"
+printf "  ║   ✔  Release v%-37s ║\n" "${VERSION} built"
+echo "  ║                                                      ║"
+echo "  ╚══════════════════════════════════════════════════════╝"
+echo -ne "${NC}"
 echo ""
-echo "  Binary:    target/release/${BINARY}"
-echo "  Package:   ${DIST_DIR}/${TARBALL}"
-echo "  Checksum:  ${DIST_DIR}/${TARBALL}.sha256"
+echo -e "  ${DIM}Binary${NC}     target/release/${BINARY}"
+echo -e "  ${DIM}Package${NC}    ${DIST_DIR}/${TARBALL}"
+echo -e "  ${DIM}Checksum${NC}   ${DIST_DIR}/${TARBALL}.sha256"
+echo -e "  ${DIM}Size${NC}       $(du -h "target/release/${BINARY}" | cut -f1)"
 echo ""
-echo "  Size:      $(du -h "target/release/${BINARY}" | cut -f1)"
-echo "  Stripped:  $(strip "target/release/${BINARY}" 2>/dev/null && du -h "target/release/${BINARY}" | cut -f1 || echo "N/A (macOS)")"
+echo -e "  ${WHITE}${BOLD}To publish on GitHub:${NC}"
+echo -e "  ${DIM}1.${NC} ${CYAN}git tag -a v${VERSION} -m \"Release v${VERSION}\"${NC}"
+echo -e "  ${DIM}2.${NC} ${CYAN}git push origin v${VERSION}${NC}"
+echo -e "  ${DIM}3.${NC} Upload ${TARBALL} to the GitHub release page"
+echo -e "  ${DIM}4.${NC} Upload ${TARBALL}.sha256 as well"
 echo ""
-echo "📤 To publish on GitHub:"
-echo "   1. Create a tag:  git tag -a v${VERSION} -m \"Release v${VERSION}\""
-echo "   2. Push the tag:  git push origin v${VERSION}"
-echo "   3. Upload ${TARBALL} to the GitHub release page"
-echo "   4. Upload ${TARBALL}.sha256 as well"
-echo ""
-echo "📦 To publish on crates.io:"
-echo "   cargo publish"
+echo -e "  ${WHITE}${BOLD}To publish on crates.io:${NC}"
+echo -e "  ${DIM}\$${NC} ${CYAN}cargo publish${NC}"
 echo ""
