@@ -137,7 +137,12 @@ pub fn git_remove_repo() -> Result<(), String> {
 // ── Remote management ────────────────────────────────────────────
 
 pub fn git_remote_set_url(remote: &str, url: &str) -> Result<(), String> {
-    run_git(&["remote", "set-url", remote, url])?;
+    // Try set-url first (remote already exists)
+    if run_git(&["remote", "set-url", remote, url]).is_ok() {
+        return Ok(());
+    }
+    // Remote doesn't exist → add it
+    run_git(&["remote", "add", remote, url])?;
     Ok(())
 }
 

@@ -515,11 +515,11 @@ impl AppState {
             if !self.is_git_repo { self.status_message = translate(&self.language, "status_not_git"); return; }
             let url = &input[8..];
             if url.is_empty() {
-                self.status_message = "Usage: /remote <url> - sets origin remote URL".to_string();
+                self.status_message = "Usage: /remote <url> - adds or updates origin remote".to_string();
                 return;
             }
             match git::git_remote_set_url("origin", url) {
-                Ok(()) => { self.status_message = format!("Remote origin set to: {}", url); }
+                Ok(()) => { self.refresh_git_status(); self.status_message = format!("Remote origin → {}", url); }
                 Err(e) => { self.status_message = format!("Error setting remote: {}", e); }
             }
             return;
