@@ -6,8 +6,9 @@
 # Or locally: ./scripts/install.sh [version]
 #
 # Strategy:
-#   1. Try to install from prebuilt release binary (fast)
-#   2. Fall back to `cargo install` (slower but always works)
+#   1. Try to install from prebuilt release binary (fastest)
+#   2. Fall back to `cargo install` from crates.io (fast, if published)
+#   3. Fall back to git clone + cargo build from source (always works)
 
 set -u  # NOT -e: we handle errors explicitly
 
@@ -136,18 +137,60 @@ install_from_release() {
     return 0
 }
 
-# ── Fallback: cargo install ──────────────────────────────────────────
-install_via_cargo() {
+# ── Fallback 1: cargo install (if published on crates.io) ──────────
+install_via_cargo_registry() {
+    if ! have_cmd cargo; then
+        return 1
+    fi
+
+    echo "🔨 Attempting to install from crates.io..."
+    if cargo install "${BINARY}" --root "${HOME}/.local" 2>/dev/null; then
+        return 0
+    else
+        echo -e "${YELLOW}⚠️  Not published on crates.io yet.${NC}"
+        return 1
+    fi
+}
+
+# ── Fallback 2: build from source (git clone + cargo install) ───────
+install_from_source() {
     if ! have_cmd cargo; then
         echo -e "${RED}❌ Rust/cargo not installed.${NC}"
         echo "   Install Rust: https://rustup.rs/"
-        echo "   Or download a release binary manually from:"
-        echo "   https://github.com/${REPO}/releases"
-        exit 1
+        return 1
     fi
 
-    echo "🔨 Installing via cargo (this may take a few minutes)..."
-    cargo install "${BINARY}" --root "${HOME}/.local"
+    if ! have_cmd git; then
+        echo -e "${RED}❌ Git not installed.${NC}"
+        return 1
+    fi
+
+    local build_dir
+    build_dir=$(mktemp -d)
+
+    echo "📥 Cloning source code from GitHub..."
+    if ! git clone --depth 1 "https://github.com/${REPO}.git" "${build_dir}/git-hero" 2>/dev/null; then
+        echo -e "${RED}❌ Could not clone repository.${NC}"
+        rm -rf "${build_dir}"
+        return 1
+    fi
+
+    echo "🔨 Building from source (this may take a few minutes)..."
+    (
+        cd "${build_dir}/git-hero"
+        cargo build --release
+    ) || {
+        echo -e "${RED}❌ Build failed.${NC}"
+        rm -rf "${build_dir}"
+        return 1
+    }
+
+    mkdir -p "${INSTALL_DIR}"
+    cp "${build_dir}/git-hero/target/release/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    chmod +x "${INSTALL_DIR}/${BINARY}"
+    rm -rf "${build_dir}"
+
+    return 0
 }
 
 # ── Main install flow ─────────────────────────────────────────────────
@@ -155,7 +198,24 @@ if install_from_release "${VERSION}"; then
     :
 else
     echo ""
-    install_via_cargo
+    if ! install_via_cargo_registry; then
+        echo ""
+        if ! install_from_source; then
+            echo ""
+            echo -e "${RED}══════════════════════════════════════════════${NC}"
+            echo -e "${RED}  ❌ All installation methods failed.${NC}"
+            echo -e "${RED}══════════════════════════════════════════════${NC}"
+            echo ""
+            echo "  Please try one of these manual options:"
+            echo "    1. Install Rust: https://rustup.rs/"
+            echo "    2. Clone the repo and build:"
+            echo "       git clone https://github.com/${REPO}.git"
+            echo "       cd git-hero && cargo build --release"
+            echo "    3. Download a release manually from:"
+            echo "       https://github.com/${REPO}/releases"
+            exit 1
+        fi
+    fi
 fi
 
 # ── Verify and report ────────────────────────────────────────────────
