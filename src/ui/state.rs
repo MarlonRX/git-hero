@@ -224,32 +224,54 @@ impl AppState {
 
     fn get_changed_files(&self) -> Vec<GitFile> {
         let mut files = Vec::new();
+
+        // Get authoritative list of staged files
+        let staged_set: std::collections::HashSet<String> = git::run_git(
+            &["diff", "--name-only", "--cached"]
+        ).unwrap_or_default()
+        .split('\n')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+
         if let Ok(out) = git::run_git(&["status", "--porcelain"]) {
             for line in out.split('\n') {
+                if line.is_empty() {
+                    continue;
+                }
+                // Use bytes (not chars) to safely index; trim trailing \r/\n
+                let line = line.trim_end_matches(['\r', '\n']);
                 if line.len() < 4 {
                     continue;
                 }
-                // Format: XY path (X=index/staged, Y=working tree)
-                let x = line.chars().next().unwrap_or(' ');  // staged status
-                let y = line.chars().nth(1).unwrap_or(' ');  // working tree status
-                let path = line[3..].to_string();
-                
-                // A file is staged if X is not space and not '?'
-                let staged = x != ' ' && x != '?';
-                
-                // Determine the display status
-                let status = if x != ' ' && x != '?' {
-                    // Has staged changes - show the staged status
-                    x.to_string()
-                } else if y != ' ' && y != '?' {
-                    // Only working tree changes
-                    y.to_string()
-                } else if x == '?' || y == '?' {
-                    "?".to_string()
+                let bytes = line.as_bytes();
+                let x = bytes[0] as char;
+                let y = bytes[1] as char;
+                // Path starts at byte 3, but if there's a rename/copy arrow, it's after " -> "
+                let raw_path = if let Some(idx) = line.find(" -> ") {
+                    &line[idx + 4..]
                 } else {
-                    format!("{}{}", x, y)
+                    &line[3..]
                 };
-                
+                // Strip leading/trailing whitespace just in case
+                let path = raw_path.trim().to_string();
+
+                // Authoritative staged check: file in the staged set
+                let staged = staged_set.contains(&path);
+
+                // Display status (what kind of change)
+                let status = if x == '?' && y == '?' {
+                    "??".to_string()          // untracked
+                } else if staged && y != ' ' {
+                    format!("{}{}", x, y)      // both staged and unstaged (e.g. MM)
+                } else if staged {
+                    x.to_string()              // staged only
+                } else if y != ' ' {
+                    y.to_string()              // unstaged only
+                } else {
+                    " ".to_string()            // should not happen
+                };
+
                 files.push(GitFile {
                     path,
                     staged,
@@ -326,20 +348,33 @@ impl AppState {
                     Err(e) => format!("Error reading untracked file: {}", e),
                 };
             } else {
-                let args = if file.staged {
-                    vec!["diff", "--cached", "--", &file.path]
-                } else {
-                    vec!["diff", "--", &file.path]
-                };
-                self.active_diff = match git::run_git(&args) {
-                    Ok(out) => {
-                        if out.is_empty() {
-                            "No changes.".to_string()
-                        } else {
-                            out
+                // Try staged diff first, then fallback to unstaged
+                let mut diff_output = String::new();
+                
+                if file.staged {
+                    match git::run_git(&["diff", "--cached", "--", &file.path]) {
+                        Ok(out) if !out.is_empty() => {
+                            diff_output.push_str(&format!("── Staged changes ──\n{}\n", out));
                         }
+                        _ => {}
                     }
-                    Err(e) => format!("Error loading diff: {}", e),
+                }
+                
+                // Always try unstaged diff too (for MM files or non-staged files)
+                match git::run_git(&["diff", "--", &file.path]) {
+                    Ok(out) if !out.is_empty() => {
+                        if !diff_output.is_empty() {
+                            diff_output.push_str("── Unstaged changes ──\n");
+                        }
+                        diff_output.push_str(&out);
+                    }
+                    _ => {}
+                }
+                
+                self.active_diff = if diff_output.is_empty() {
+                    "No changes.".to_string()
+                } else {
+                    diff_output
                 };
             }
         } else {

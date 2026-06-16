@@ -43,16 +43,33 @@ Inspirada en herramientas como `lazygit` o `gitui`, pero enfocada en ser **simpl
 
 ## 📦 Installation
 
-### Prerequisites
-- Rust 1.75+ ([install from rustup.rs](https://rustup.rs/))
-- Git installed and available in `$PATH`
+### Quick Install (recommended)
 
-### Build
+**Linux & macOS:**
 ```bash
+curl -fsSL https://raw.githubusercontent.com/MarlonRX/git-hero/main/scripts/install.sh | bash
+```
+
+**Homebrew (macOS):**
+```bash
+brew tap MarlonRX/git-hero
+brew install git-hero
+```
+
+**Cargo (any platform):**
+```bash
+cargo install git-hero
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/MarlonRX/git-hero.git
+cd git-hero
 cargo build --release
 ```
 
-The binary will be at `target/release/git-hero`. You can move it to `/usr/local/bin/` to have it available globally.
+The binary will be at `target/release/git-hero`. Move it to a directory in your `$PATH`:
 
 ---
 
