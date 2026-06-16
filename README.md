@@ -1,103 +1,385 @@
-# gacp-rx 🚀 (Git Add, Commit, Push - Redesigned)
+# git-hero 🚀
 
-Bienvenido a **gacp-rx**, la evolución y extensión de tu script interactivo `gacp` a una aplicación de interfaz de terminal (TUI) completa, rápida y optimizada.
+> **[English](#english)** · **[Español](#español)**
 
-El objetivo de este proyecto es transformar tu flujo de trabajo de Git actual (que realiza análisis remoto, adición, commit, pull y push) en una herramienta visual e interactiva en la terminal, inspirada en herramientas modernas como `lazygit` o `gitui`, pero optimizada y adaptada específicamente a tu flujo rápido.
+A fast and visual Terminal UI (TUI) application for managing Git, written in **Rust** with [Ratatui](https://ratatui.rs/).
 
----
-
-## 🛠️ Opciones de Stack Tecnológico
-
-Dado tu interés en lenguajes rápidos y optimizados como **Rust** y **Lua**, aquí tienes las dos opciones principales para construir `gacp-rx`, con sus ventajas y desventajas:
-
-### Opción 1: Rust + Ratatui (Recomendada para herramienta independiente)
-Rust es actualmente el estándar de la industria para construir CLI y TUI veloces, eficientes y seguras.
-
-*   **Lenguaje:** Rust (compilado, sin recolector de basura, huella de memoria mínima).
-*   **Framework TUI:** [Ratatui](https://ratatui.rs/) (el sucesor espiritual de `tui-rs`, muy activo, basado en ciclos de dibujado inmediato).
-*   **Backend de Terminal:** `crossterm` (multiplataforma, maneja eventos de teclado/mouse y códigos ANSI).
-*   **Integración con Git:**
-    *   *Opción Ligera (Recomendada):* Ejecutar comandos de Git del sistema mediante `std::process::Command`. Esto asegura compatibilidad nativa con tus claves GPG (firma de commits), agentes SSH, credenciales y hooks locales de Git.
-    *   *Opción Embebida:* `git2-rs` (bindings de `libgit2`). Más rápida para consultas complejas, pero más compleja de configurar con SSH/GPG.
-
-#### Ventajas:
-*   Genera un **único ejecutable binario** autocontenido, ultra veloz, que puedes mover a cualquier carpeta (`/usr/local/bin`, etc.) sin dependencias.
-*   Tipado fuerte que previene errores en tiempo de ejecución.
-*   Ecosistema de widgets TUI gigante (listas, tablas, inputs de texto, barras de progreso, etc.).
+Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast, and read-only** to visualize your repository state and execute common Git actions.
 
 ---
 
-### Opción 2: Lua + Neovim Plugin (Recomendada si usas Neovim)
-Lua es extremadamente rápido (gracias a LuaJIT) y ligero, pero su ecosistema de TUI independientes es más limitado. Sin embargo, brilla si lo construyes como una extensión de Neovim.
+## English
 
-*   **Lenguaje:** Lua 5.1 / LuaJIT.
-*   **Entorno:** Integrado dentro de Neovim usando librerías como `nui.nvim` o `plenary.nvim`.
-*   **Integración Git:** Mediante llamadas asíncronas a comandos de Git.
+Una aplicación de terminal (TUI) rápida y visual para gestionar Git, escrita en **Rust** con [Ratatui](https://ratatui.rs/).
 
-#### Ventajas:
-*   Si ya usas Neovim, la integración es 100% natural, compartiendo tus buffers y atajos.
-*   Iteración y scripting sumamente rápidos.
-*   Curva de aprendizaje muy baja.
-
-#### Desventajas:
-*   Para ejecutarlo como un comando independiente del sistema fuera de Neovim, requiere un intérprete de Lua instalado y la instalación de dependencias de terceros es más compleja de distribuir a otros usuarios.
+Inspirada en herramientas como `lazygit` o `gitui`, pero enfocada en ser **simple, rápida y de solo lectura** para visualizar el estado de tu repositorio y ejecutar acciones comunes de Git.
 
 ---
 
-## 🎯 Características Planeadas para `gacp-rx`
+## ✨ Features
 
-1.  **Dashboard Principal Dinámico:**
-    *   Estado de la rama local vs. remota (commits *ahead* / *behind*) obtenido asíncronamente en segundo plano.
-    *   Panel visual del estado de archivos (modificados, eliminados, no rastreados).
-2.  **Gestión de staging Interactiva:**
-    *   Permitir seleccionar archivos individuales con la tecla `Espacio` para agregarlos (stage) o quitarlos (unstage).
-3.  **Editor de Mensajes de Commit Embebido:**
-    *   Un modal o caja de texto interactiva para escribir el mensaje de commit directamente, con soporte para atajos de edición básicos.
-4.  **Confirmaciones Inteligentes:**
-    *   Pop-ups rápidos para aceptar `git pull` o `git push` con teclas dedicadas (ej. `y`/`n`).
-5.  **Historial Visual (Log):**
-    *   Un panel opcional para visualizar los últimos commits del repositorio.
+### Visualization
+- **Visual dashboard** with repository status (branch, remote, ahead/behind)
+- **Files panel** with change indicators (modified, added, deleted, untracked)
+- **Side-by-side diff** between current state and HEAD to see changes at a glance
+- **Commit history** with expandable details
+- **10 customizable themes** (Tokyo Night, Gruvbox Dark, Dracula, Nord, etc.)
+
+### Git Actions
+- Stage/unstage individual files or all at once
+- Create commits with message
+- Undo last commit (with safety validation)
+- Push, pull, fetch
+- Create and switch between branches
+- Stash and stash pop
+- Configure remote
+- Remove repository (with double confirmation)
+
+### Usage Modes
+- **TUI Mode** (default): Interactive visual interface
+- **CLI Mode** (`-cli` or `-c`): Non-interactive flow for scripting
 
 ---
 
-## 📂 Estructura de Archivos del Proyecto (Propuesta para Rust)
+## 📦 Installation
 
-Si decidimos ir por la opción de **Rust**, esta será la estructura base:
+### Prerequisites
+- Rust 1.75+ ([install from rustup.rs](https://rustup.rs/))
+- Git installed and available in `$PATH`
 
-```text
-gacp-rx/
-├── Cargo.toml          # Configuración de dependencias (ratatui, crossterm, etc.)
-├── README.md           # Este archivo
-├── ROADMAP.md          # Plan de desarrollo paso a paso
-└── src/
-    ├── main.rs         # Entrada de la aplicación e inicialización de la terminal
-    ├── app.rs          # Estado del TUI (pantallas, listas, inputs)
-    ├── ui.rs           # Renderizado de componentes gráficos de Ratatui
-    ├── event.rs        # Loop de eventos (teclado, ticks)
-    └── git.rs          # Interfaz de comunicación con comandos Git
+### Build
+```bash
+cargo build --release
+```
+
+The binary will be at `target/release/git-hero`. You can move it to `/usr/local/bin/` to have it available globally.
+
+---
+
+## 🚀 Usage
+
+### TUI Mode (interactive)
+```bash
+cargo run
+# or after building:
+./target/release/git-hero
+```
+
+### CLI Mode (non-interactive)
+```bash
+cargo run -- -cli
+```
+
+### Debug Mode
+Generates detailed logs in `/tmp/git-hero-debug.log`:
+```bash
+cargo run -- --debug
+tail -f /tmp/git-hero-debug.log
 ```
 
 ---
 
-*Nota: He creado el archivo [ROADMAP.md](file:///Users/mramirez/Projects/gacp-rx/ROADMAP.md) en esta misma carpeta para detallar las fases del proyecto y guiarte en el desarrollo paso a paso.*
+## ⌨️ Keyboard Shortcuts
+
+### Navigation
+| Key | Action |
+|-------|--------|
+| `Tab` | Switch focus between panels (files → diff → commits) |
+| `↑/↓` or `k/j` | Move selection up/down |
+| `Space` | Stage/unstage selected file |
+| `Enter` | View commit detail (commits panel) |
+
+### Git Actions
+| Key | Action |
+|-------|--------|
+| `a` | Stage all files |
+| `u` | Unstage all files |
+| `c` | Create commit (opens input) |
+| `r` | Undo last commit |
+| `p` | Push |
+| `f` | Fetch |
+| `l` | Pull |
+| `s` | Stash |
+| `d` | Stash pop |
+| `b` | List branches |
+| `n` | Create new branch |
+| `o` | Configure remote |
+| `t` | Change theme |
+| `y` | Copy diff to clipboard |
+
+### Other
+| Key | Action |
+|-------|--------|
+| `?` or `h` | Show help |
+| `q` | Quit |
+| `/` | Open command bar |
+| `Ctrl+C` | Quit |
+
+### Mouse
+- **Click** on any panel → switch focus
+- **Mouse wheel** on a panel → contextual scroll
+- **Wheel on diff** → scroll diff
+- **Wheel on commits** → scroll commit list
 
 ---
 
-## 📜 Código de Referencia Original (Zsh Script)
+## 📂 Project Structure
 
-Para facilitar la transición y el desarrollo paso a paso, aquí tienes el código original de tu función `gacp` en `.zshrc`:
+```text
+git-hero/
+├── Cargo.toml              # Dependencies (ratatui, crossterm, dirs, serde)
+├── README.md               # This file
+├── .gitignore              # Ignored files
+└── src/
+    ├── main.rs             # Main entry and CLI args
+    ├── config.rs           # Load/save user configuration
+    ├── theme.rs            # 10 color themes
+    ├── i18n.rs             # English/Spanish translations
+    ├── git.rs              # Wrapper around system git commands
+    ├── cli.rs              # CLI mode (non-interactive)
+    └── ui/
+        ├── mod.rs          # UI module hub + event loop
+        ├── state.rs        # AppState, GitFile, GitCommit
+        ├── rendering.rs    # draw_ui(), panel drawing, diff renderer
+        ├── modals.rs        # Modals (setup, theme, help, docs)
+        └── events.rs        # Keyboard and mouse handlers
+```
 
-```zsh
-gacp() {
-  local green='\033[0;32m'
-  local blue='\033[0;34m'
-  local yellow='\033[1;33m'
-  local red='\033[0;31m'
-  local cyan='\033[0;36m'
-  local bold='\033[1m'
-  local nc='\033[0m'
+---
 
-  local sep="${blue}════════════════════════════════════════${nc}"
+## ⚙️ Configuration
+
+The configuration file is saved at:
+- **Linux**: `~/.config/git-hero/config.json`
+- **macOS**: `~/Library/Application Support/git-hero/config.json`
+
+On first launch, a configuration wizard runs where you can choose:
+1. Language (English / Español)
+2. Use Nerd Font for icons
+3. Theme
+
+---
+
+## 🎨 Included Themes
+
+- Tokyo Night
+- Gruvbox Dark
+- Gruvbox Light
+- Dracula
+- Nord
+- Solarized Dark
+- Solarized Light
+- One Dark
+- Monokai
+- Catppuccin
+
+Switch themes with the `t` key.
+
+---
+
+## 🔧 Dependencies
+
+| Crate | Version | Use |
+|-------|---------|-----|
+| `ratatui` | 0.30.1 | TUI framework |
+| `crossterm` | 0.29.0 | Terminal backend and events |
+| `dirs` | 6.0.0 | System home/config paths |
+| `serde` | 1.0.228 | Configuration serialization |
+| `serde_json` | 1.0.150 | JSON format for config |
+
+---
+
+## 📝 License
+
+MIT
+
+---
+
+## Español
+
+A fast and visual Terminal UI (TUI) application for managing Git, written in **Rust** with [Ratatui](https://ratatui.rs/).
+
+Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast, and read-only** to visualize your repository state and execute common Git actions.
+
+---
+
+## ✨ Características
+
+### Visualización
+- **Dashboard visual** con estado del repositorio (rama, remoto, ahead/behind)
+- **Panel de archivos** con indicadores de cambios (modificados, agregados, eliminados, sin trackear)
+- **Diff side-by-side** entre el estado actual y HEAD para ver los cambios de un vistazo
+- **Historial de commits** con detalles expandibles
+- **10 temas** personalizables (Tokyo Night, Gruvbox Dark, Dracula, Nord, etc.)
+
+### Acciones de Git
+- Stage/unstage de archivos individuales o todos a la vez
+- Crear commits con mensaje
+- Deshacer el último commit (con validación de seguridad)
+- Push, pull, fetch
+- Crear y cambiar entre ramas
+- Stash y stash pop
+- Configurar remote
+- Eliminar el repositorio (con doble confirmación)
+
+### Modos de uso
+- **Modo TUI** (por defecto): Interfaz visual interactiva
+- **Modo CLI** (`-cli` o `-c`): Flujo no interactivo para scripting
+
+---
+
+## 📦 Instalación
+
+### Prerrequisitos
+- Rust 1.75+ ([instalar desde rustup.rs](https://rustup.rs/))
+- Git instalado y disponible en `$PATH`
+
+### Compilar
+```bash
+cargo build --release
+```
+
+El binario estará en `target/release/git-hero`. Puedes moverlo a `/usr/local/bin/` para tenerlo disponible globalmente.
+
+---
+
+## 🚀 Uso
+
+### Modo TUI (interactivo)
+```bash
+cargo run
+# o después de compilar:
+./target/release/git-hero
+```
+
+### Modo CLI (no interactivo)
+```bash
+cargo run -- -cli
+```
+
+### Modo Debug
+Genera logs detallados en `/tmp/git-hero-debug.log`:
+```bash
+cargo run -- --debug
+tail -f /tmp/git-hero-debug.log
+```
+
+---
+
+## ⌨️ Atajos de Teclado
+
+### Navegación
+| Tecla | Acción |
+|-------|--------|
+| `Tab` | Cambia foco entre panels (files → diff → commits) |
+| `↑/↓` o `k/j` | Mover selección arriba/abajo |
+| `Espacio` | Stage/unstage archivo seleccionado |
+| `Enter` | Ver detalle del commit (panel commits) |
+
+### Acciones de Git
+| Tecla | Acción |
+|-------|--------|
+| `a` | Stage todos los archivos |
+| `u` | Unstage todos los archivos |
+| `c` | Crear commit (abre input) |
+| `r` | Deshacer último commit |
+| `p` | Push |
+| `f` | Fetch |
+| `l` | Pull |
+| `s` | Stash |
+| `d` | Stash pop |
+| `b` | Listar ramas |
+| `n` | Crear nueva rama |
+| `o` | Configurar remote |
+| `t` | Cambiar tema |
+| `y` | Copiar diff al portapapeles |
+
+### Otros
+| Tecla | Acción |
+|-------|--------|
+| `?` o `h` | Mostrar ayuda |
+| `q` | Salir |
+| `/` | Abrir barra de comandos |
+| `Ctrl+C` | Salir |
+
+### Mouse
+- **Click** en cualquier panel → cambia el foco
+- **Rueda del mouse** sobre un panel → scroll contextual
+- **Rueda en el diff** → scroll del diff
+- **Rueda en commits** → scroll de la lista de commits
+
+---
+
+## 📂 Estructura del Proyecto
+
+```text
+git-hero/
+├── Cargo.toml              # Dependencias (ratatui, crossterm, dirs, serde)
+├── README.md               # Este archivo
+├── .gitignore              # Archivos ignorados
+└── src/
+    ├── main.rs             # Entrada principal y CLI args
+    ├── config.rs           # Carga/guarda configuración del usuario
+    ├── theme.rs            # 10 temas con colores
+    ├── i18n.rs             # Traducciones inglés/español
+    ├── git.rs              # Wrapper sobre comandos git del sistema
+    ├── cli.rs              # Modo CLI (no interactivo)
+    └── ui/
+        ├── mod.rs          # Hub del módulo UI + event loop
+        ├── state.rs        # AppState, GitFile, GitCommit
+        ├── rendering.rs    # draw_ui(), panel drawing, diff renderer
+        ├── modals.rs       # Modales (setup, theme, help, docs)
+        └── events.rs       # Handlers de teclado y mouse
+```
+
+---
+
+## ⚙️ Configuración
+
+El archivo de configuración se guarda en:
+- **Linux**: `~/.config/git-hero/config.json`
+- **macOS**: `~/Library/Application Support/git-hero/config.json`
+
+Al primer inicio se ejecuta un asistente de configuración donde puedes elegir:
+1. Idioma (English / Español)
+2. Usar Nerd Font para iconos
+3. Tema
+
+---
+
+## 🎨 Temas Incluidos
+
+- Tokyo Night
+- Gruvbox Dark
+- Gruvbox Light
+- Dracula
+- Nord
+- Solarized Dark
+- Solarized Light
+- One Dark
+- Monokai
+- Catppuccin
+
+Cambia de tema con la tecla `t`.
+
+---
+
+## 🔧 Dependencias
+
+| Crate | Versión | Uso |
+|-------|---------|-----|
+| `ratatui` | 0.30.1 | Framework TUI |
+| `crossterm` | 0.29.0 | Backend de terminal y eventos |
+| `dirs` | 6.0.0 | Rutas del sistema home/config |
+| `serde` | 1.0.228 | Serialización de configuración |
+| `serde_json` | 1.0.150 | Formato JSON para config |
+
+---
+
+## 📝 Licencia
+
+MIT
+
 
   echo ""
 

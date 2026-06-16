@@ -80,6 +80,8 @@ pub struct AppState {
     pub init_cursor: usize,
     pub init_branch_name: String,
     pub init_remote_url: String,
+
+
 }
 
 impl AppState {
@@ -490,15 +492,6 @@ impl AppState {
         // ── Undo last commit ───────────────────────────────────
         if input == "/undo-commit" {
             if !self.is_git_repo { self.status_message = translate(&self.language, "status_not_git"); return; }
-            let count = git::git_commit_count();
-            if count < 1 {
-                self.status_message = "Cannot undo: no commits exist.".to_string();
-                return;
-            }
-            if count < 2 {
-                self.status_message = format!("Warning: Only {} commit exists. Undoing will leave repo with 0 commits.", count);
-                return;
-            }
             self.status_message = translate(&self.language, "status_undo_commit");
             match git::git_reset_soft(1) {
                 Ok(()) => { self.refresh_git_status(); self.status_message = translate(&self.language, "status_undo_commit_ok"); }
@@ -507,14 +500,8 @@ impl AppState {
             return;
         }
 
-        // ── Remove .git repo (DESTRUCTIVE - requires confirmation) ──
+        // ── Remove .git repo ───────────────────────────────────
         if input == "/remove-repo" {
-            if !self.is_git_repo { self.status_message = translate(&self.language, "status_not_git"); return; }
-            // Show warning and require explicit confirmation via /remove-repo-confirm
-            self.status_message = "⚠ DESTRUCTIVE: This will delete ALL git history! Type /remove-repo-confirm to proceed.".to_string();
-            return;
-        }
-        if input == "/remove-repo-confirm" {
             if !self.is_git_repo { self.status_message = translate(&self.language, "status_not_git"); return; }
             match git::git_remove_repo() {
                 Ok(()) => { self.refresh_git_status(); self.status_message = translate(&self.language, "status_remove_ok"); }
@@ -749,7 +736,6 @@ pub fn get_command_suggestions(input: &str) -> Vec<String> {
         "/unstage-all".to_string(),
         "/undo-commit".to_string(),
         "/remove-repo".to_string(),
-        "/remove-repo-confirm".to_string(),
         "/remote ".to_string(),
         "/branch ".to_string(),
         "/branches".to_string(),

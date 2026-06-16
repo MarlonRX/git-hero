@@ -2,6 +2,20 @@
 name = "git-hero"
 version = "0.1.0"
 edition = "2024"
+description = "Fast and visual TUI for managing Git, written in Rust with Ratatui"
+license = "MIT"
+authors = ["Marlon Ramirez <mramirezce14@gmail.com>"]
+repository = "https://github.com/MarlonRX/git-hero"
+homepage = "https://github.com/MarlonRX/git-hero"
+readme = "README.md"
+keywords = ["git", "tui", "cli", "terminal", "ratatui", "development"]
+categories = ["command-line-utilities", "development-tools::git"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 crossterm = "0.29.0"
@@ -9,3 +23,9 @@ dirs = "6.0.0"
 ratatui = "0.30.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

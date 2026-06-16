@@ -1,1 +1,38 @@
+# Rust build artifacts
 /target
+**/*.rs.bk
+**/*.pdb
+
+# Cargo
+Cargo.lock
+
+# Debug logs (created with --debug flag)
+/tmp/git-hero-debug.log
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+*.iml
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Environment / Config
+.env
+.env.local
+*.local
+
+# Backup files
+*~
+*.bak
+*.tmp
+*.orig

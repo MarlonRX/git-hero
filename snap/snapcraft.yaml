@@ -1,0 +1,39 @@
+name: git-hero
+base: core22
+version: '0.1.0'
+summary: Fast and visual TUI for managing Git
+description: |
+  A fast and visual Terminal UI (TUI) application for managing Git, written in
+  Rust with Ratatui. Inspired by tools like lazygit and gitui, but focused on
+  being simple, fast, and read-only to visualize your repository state and
+  execute common Git actions.
+
+grade: stable
+confinement: strict
+
+apps:
+  git-hero:
+    command: bin/git-hero
+    extensions: [gnome]
+    plugs:
+      - home
+      - network
+      - removable-media
+      - opengl
+
+parts:
+  git-hero:
+    plugin: rust
+    source: .
+    build-packages:
+      - libssl-dev
+      - pkg-config
+    override-build: |
+      cargo build --release --locked
+      install -Dm755 target/release/git-hero $CRAFT_PART_INSTALL/bin/git-hero
+
+layout:
+  /usr/share/bash-completion/completions:
+    bind: $SNAP/etc/bash_completion.d
+  /etc/bash_completion.d:
+    bind: $SNAP_DATA/etc/bash_completion.d

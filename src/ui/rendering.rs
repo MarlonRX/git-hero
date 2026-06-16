@@ -396,6 +396,8 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
     } else if s.show_docs_modal {
         super::modals::draw_docs_modal(f, s);
     }
+
+
 }
 
 // ═════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,42 @@
+# Maintainer: Your Name <your.email@example.com>
+pkgname=git-hero
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Fast and visual TUI for managing Git, written in Rust with Ratatui"
+arch=('x86_64' 'aarch64')
+url="https://github.com/your-username/git-hero"
+license=('MIT')
+depends=('git')
+makedepends=('cargo' 'rust')
+optdepends=()
+provides=('git-hero')
+conflicts=('git-hero')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/your-username/git-hero/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('REPLACE_WITH_ACTUAL_SHA256')
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_HOME="$srcdir/cargo-home"
+    cargo build --release --frozen
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_HOME="$srcdir/cargo-home"
+    cargo test --release --frozen || true
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 "target/release/git-hero" "$pkgdir/usr/bin/git-hero"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
