@@ -301,9 +301,13 @@ fn handle_no_repo_key(code: KeyCode, s: &mut AppState) -> bool {
 fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
     match code {
         KeyCode::Tab => {
-            s.focus_pane = if s.focus_pane == "files" { "commits".into() } else { "files".into() };
+            // Cycle focus: files → diff → commits → files
+            s.focus_pane = match s.focus_pane.as_str() {
+                "files" => "diff".into(),
+                "diff" => "commits".into(),
+                _ => "files".into(),
+            };
             s.diff_scroll_offset = 0;
-            s.update_diff_content();
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if s.focus_pane == "files" && !s.files.is_empty() {
@@ -311,7 +315,11 @@ fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 s.update_diff_content(); s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + s.commits.len() - 1) % s.commits.len();
+                s.commit_scroll_offset = 0;
+                s.commit_detail_scroll = 0;
                 s.update_diff_content(); s.diff_scroll_offset = 0;
+            } else if s.focus_pane == "diff" {
+                if s.diff_scroll_offset > 0 { s.diff_scroll_offset -= 1; }
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -320,11 +328,42 @@ fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 s.update_diff_content(); s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + 1) % s.commits.len();
+                s.commit_scroll_offset = 0;
+                s.commit_detail_scroll = 0;
                 s.update_diff_content(); s.diff_scroll_offset = 0;
+            } else if s.focus_pane == "diff" {
+                s.diff_scroll_offset += 1;
             }
         }
-        KeyCode::Char(' ') | KeyCode::Enter => {
+        KeyCode::Char(' ') => {
             if s.focus_pane == "files" && !s.files.is_empty() {
+                s.toggle_stage_file(s.selected_file_idx);
+            }
+        }
+        KeyCode::Enter => {
+            if s.focus_pane == "commits" && !s.commits.is_empty() {
+                // Toggle commit detail view
+                if s.show_commit_detail {
+                    // Close detail view
+                    s.show_commit_detail = false;
+                    s.commit_detail_diff.clear();
+                    s.commit_detail_scroll = 0;
+                    s.update_diff_content();
+                } else {
+                    // Show commit details
+                    s.commit_detail_scroll = 0;
+                    let commit_hash = &s.commits[s.selected_commit_idx].hash;
+                    match git::git_diff_commit(commit_hash) {
+                        Ok(diff) => {
+                            s.show_commit_detail = true;
+                            s.commit_detail_diff = diff;
+                        }
+                        Err(e) => {
+                            s.status_message = format!("Error loading commit: {}", e);
+                        }
+                    }
+                }
+            } else if s.focus_pane == "files" && !s.files.is_empty() {
                 s.toggle_stage_file(s.selected_file_idx);
             }
         }
@@ -343,13 +382,67 @@ fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::Char('f') | KeyCode::Char('F') => s.execute_command("/fetch"),
         KeyCode::Char('l') | KeyCode::Char('L') => s.execute_command("/pull"),
         KeyCode::Char('t') | KeyCode::Char('T') => s.execute_command("/themes"),
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            // Copy current diff to clipboard (if available)
+            if !s.active_diff.is_empty() {
+                #[cfg(target_os = "macos")]
+                {
+                    use std::process::Command;
+                    let _ = Command::new("pbcopy")
+                        .stdin(std::process::Stdio::piped())
+                        .spawn()
+                        .and_then(|mut child| {
+                            use std::io::Write;
+                            child.stdin.as_mut().unwrap().write_all(s.active_diff.as_bytes())?;
+                            child.wait()
+                        });
+                    s.status_message = "Diff copied to clipboard!".to_string();
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    use std::process::Command;
+                    let _ = Command::new("xclip")
+                        .arg("-selection")
+                        .arg("clipboard")
+                        .stdin(std::process::Stdio::piped())
+                        .spawn()
+                        .and_then(|mut child| {
+                            use std::io::Write;
+                            child.stdin.as_mut().unwrap().write_all(s.active_diff.as_bytes())?;
+                            child.wait()
+                        });
+                    s.status_message = "Diff copied to clipboard!".to_string();
+                }
+                #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+                {
+                    s.status_message = "Copy not supported on this platform".to_string();
+                }
+            } else {
+                s.status_message = "Nothing to copy".to_string();
+            }
+        }
         KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => { s.show_help_modal = true; }
         // Capital d is already handled above with stash-pop
         KeyCode::Char('q') | KeyCode::Char('Q') => return false,
         KeyCode::Char('/') => { s.show_input = true; s.input_value = "/".into(); s.input_cursor_pos = 1; s.update_suggestions(); }
-        KeyCode::PageDown => { s.diff_scroll_offset += 5; }
+        // ── Scroll support ────────────────────────────────────────
+        KeyCode::PageDown => {
+            if s.focus_pane == "commits" && s.show_commit_detail {
+                s.commit_detail_scroll += 5;
+            } else if s.focus_pane == "commits" {
+                s.commit_scroll_offset += 5;
+            } else {
+                s.diff_scroll_offset += 5;
+            }
+        }
         KeyCode::PageUp => {
-            if s.diff_scroll_offset >= 5 { s.diff_scroll_offset -= 5; } else { s.diff_scroll_offset = 0; }
+            if s.focus_pane == "commits" && s.show_commit_detail {
+                if s.commit_detail_scroll >= 5 { s.commit_detail_scroll -= 5; } else { s.commit_detail_scroll = 0; }
+            } else if s.focus_pane == "commits" {
+                if s.commit_scroll_offset >= 5 { s.commit_scroll_offset -= 5; } else { s.commit_scroll_offset = 0; }
+            } else {
+                if s.diff_scroll_offset >= 5 { s.diff_scroll_offset -= 5; } else { s.diff_scroll_offset = 0; }
+            }
         }
         _ => {}
     }
@@ -491,23 +584,133 @@ fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, inner: Rect) {
     let sidebar_w = (inner.width / 4).max(20);
     let split_x = inner.x + sidebar_w;
     let header_h: u16 = 2;
-    let files_start_y = inner.y + header_h + 3;
-
+    
+    // Sidebar click zones
+    let info_end_y = inner.y + header_h + 3;   // STATUS panel (3 rows)
+    let shortcuts_start_y = inner.y + inner.height.saturating_sub(9); // SHORTCUTS panel (9 rows)
+    
     if col >= inner.x && col < split_x {
-        let clicked = row.saturating_sub(files_start_y) as usize;
-        if clicked < s.files.len() {
-            s.focus_pane = "files".into(); s.selected_file_idx = clicked; s.diff_scroll_offset = 0;
-            if col >= inner.x + 2 && col <= inner.x + 6 {
-                s.toggle_stage_file(clicked);
-            } else { s.update_diff_content(); }
+        // Clicked in sidebar
+        if row < info_end_y {
+            // STATUS panel → focus files
+            s.focus_pane = "files".into();
+        } else if row >= shortcuts_start_y {
+            // SHORTCUTS panel → could be useful, focus diff for now
+            s.focus_pane = "diff".into();
+        } else {
+            // FILES panel → select file
+            let clicked = row.saturating_sub(info_end_y) as usize;
+            if clicked < s.files.len() {
+                s.focus_pane = "files".into();
+                s.selected_file_idx = clicked;
+                s.diff_scroll_offset = 0;
+                if col >= inner.x + 2 && col <= inner.x + 6 {
+                    s.toggle_stage_file(clicked);
+                } else {
+                    s.update_diff_content();
+                }
+            } else {
+                // Clicked empty space in files → still focus files
+                s.focus_pane = "files".into();
+            }
         }
-    } else if col > split_x && col < inner.x + inner.width {
-        let split_y = inner.y + header_h + ((inner.height.saturating_sub(header_h)) * 65 / 100);
-        let commit_start = split_y + 1;
-        let clicked = row.saturating_sub(commit_start) as usize;
-        if clicked < s.commits.len() {
-            s.focus_pane = "commits".into(); s.selected_commit_idx = clicked; s.diff_scroll_offset = 0;
-            s.update_diff_content();
+    } else if col >= split_x && col < inner.x + inner.width {
+        // Right panel
+        let right_height = inner.height.saturating_sub(header_h);
+        let diff_height = (right_height * 65 / 100).max(3);
+        let split_y = inner.y + header_h + diff_height;
+        
+        if row >= inner.y + header_h && row < split_y {
+            // DIFF panel → focus diff
+            s.focus_pane = "diff".into();
+        } else if row >= split_y && row < inner.y + inner.height {
+            // COMMITS panel → select commit
+            let commit_start = split_y + 1;
+            let clicked = row.saturating_sub(commit_start) as usize;
+            if clicked < s.commits.len() {
+                s.focus_pane = "commits".into();
+                s.selected_commit_idx = clicked;
+                s.diff_scroll_offset = 0;
+                s.update_diff_content();
+            } else {
+                // Clicked empty space in commits → still focus commits
+                s.focus_pane = "commits".into();
+            }
+        }
+    }
+}
+
+/// Handle mouse wheel scroll - scrolls the panel under the cursor
+pub fn handle_mouse_scroll(
+    scroll_up: bool,
+    col: u16,
+    row: u16,
+    s: &mut AppState,
+    terminal: &Terminal<CrosstermBackend<Stdout>>,
+) {
+    let size = terminal.size().unwrap_or_default();
+    let area = Rect { x: 0, y: 0, width: size.width, height: size.height };
+    let target_w = (area.width as f32 * 0.80) as u16;
+    let target_h = (area.height as f32 * 0.85) as u16;
+    let outer = Rect {
+        x: area.x + (area.width.saturating_sub(target_w)) / 2,
+        y: area.y + (area.height.saturating_sub(target_h)) / 2,
+        width: target_w.max(40),
+        height: target_h.max(10),
+    };
+    let inner = Rect {
+        x: outer.x + 1,
+        y: outer.y + 1,
+        width: outer.width.saturating_sub(2),
+        height: outer.height.saturating_sub(2),
+    };
+
+    // Don't scroll if modals are open
+    if s.show_theme_modal || s.show_help_modal || s.show_docs_modal || s.setup_step > 0 || s.init_wizard_active {
+        return;
+    }
+
+    let sidebar_w = (inner.width / 4).max(20);
+    let split_x = inner.x + sidebar_w;
+    let header_h: u16 = 2;
+    let content_top = inner.y + header_h;
+
+    // Determine which panel the mouse is over
+    if col >= split_x && col < inner.x + inner.width {
+        // Right panel (diff or commits)
+        let right_height = inner.height.saturating_sub(header_h);
+        let diff_height = (right_height * 65 / 100).max(3);
+        let split_y = content_top + diff_height;
+
+        if row >= content_top && row < split_y {
+            // Diff panel - scroll diff
+            if scroll_up {
+                if s.diff_scroll_offset >= 3 { s.diff_scroll_offset -= 3; } else { s.diff_scroll_offset = 0; }
+            } else {
+                s.diff_scroll_offset += 3;
+            }
+        } else if row >= split_y && row < inner.y + inner.height {
+            // Commits panel - scroll commits or commit detail
+            if s.show_commit_detail {
+                if scroll_up {
+                    if s.commit_detail_scroll >= 3 { s.commit_detail_scroll -= 3; } else { s.commit_detail_scroll = 0; }
+                } else {
+                    s.commit_detail_scroll += 3;
+                }
+            } else {
+                if scroll_up {
+                    if s.commit_scroll_offset >= 3 { s.commit_scroll_offset -= 3; } else { s.commit_scroll_offset = 0; }
+                } else {
+                    s.commit_scroll_offset += 3;
+                }
+            }
+        }
+    } else if col >= inner.x && col < split_x {
+        // Left sidebar - scroll files list
+        let files_area_top = content_top + 3; // After STATUS block
+        if row >= files_area_top {
+            // Could add file list scroll here if needed in the future
+            // For now, just ignore sidebar scroll
         }
     }
 }

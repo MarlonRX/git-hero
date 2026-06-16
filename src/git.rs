@@ -193,3 +193,10 @@ pub fn git_stash_pop() -> Result<(), String> {
     run_git(&["stash", "pop"])?;
     Ok(())
 }
+
+// ── Diff helpers ─────────────────────────────────────────────────
+
+/// Get the full diff for a commit
+pub fn git_diff_commit(commit_hash: &str) -> Result<String, String> {
+    run_git(&["show", "--format=", commit_hash])
+}

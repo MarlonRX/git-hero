@@ -14,7 +14,7 @@ pub mod events;
 
 pub use state::AppState;
 pub use rendering::draw_ui;
-pub use events::{handle_key_event, handle_mouse_click};
+pub use events::{handle_key_event, handle_mouse_click, handle_mouse_scroll};
 
 use std::io;
 use std::time::Duration;
@@ -27,21 +27,34 @@ use crossterm::{
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 /// Launch the TUI application
-pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
+    if debug { crate::log_debug("TUI: Enabling raw mode"); }
     enable_raw_mode()?;
     let mut stdout = io::stdout();
+    if debug { crate::log_debug("TUI: Entering alternate screen"); }
     execute!(
         stdout,
         EnterAlternateScreen,
         crossterm::event::EnableMouseCapture
     )?;
     let backend = CrosstermBackend::new(stdout);
+    if debug { crate::log_debug("TUI: Creating terminal"); }
     let mut terminal = Terminal::new(backend)?;
 
+    if debug { crate::log_debug("TUI: Creating AppState"); }
     let mut state = AppState::new();
+    if debug { crate::log_debug(&format!("TUI: AppState created, is_git_repo={}, files={}, commits={}", state.is_git_repo, state.files.len(), state.commits.len())); }
 
+    let mut frame_count: u64 = 0;
+    
     loop {
-        terminal.draw(|f| draw_ui(f, &mut state))?;
+        frame_count += 1;
+        
+        if debug && frame_count == 1 { crate::log_debug("TUI: First draw starting"); }
+        terminal.draw(|f| {
+            draw_ui(f, &mut state);
+        })?;
+        if debug && frame_count == 1 { crate::log_debug("TUI: First draw completed"); }
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -56,8 +69,17 @@ pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             } else if let Event::Mouse(mouse) = event::read()? {
-                if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-                    handle_mouse_click(mouse.column, mouse.row, &mut state, &terminal);
+                match mouse.kind {
+                    MouseEventKind::Down(MouseButton::Left) => {
+                        handle_mouse_click(mouse.column, mouse.row, &mut state, &terminal);
+                    }
+                    MouseEventKind::ScrollUp => {
+                        handle_mouse_scroll(true, mouse.column, mouse.row, &mut state, &terminal);
+                    }
+                    MouseEventKind::ScrollDown => {
+                        handle_mouse_scroll(false, mouse.column, mouse.row, &mut state, &terminal);
+                    }
+                    _ => {}
                 }
             }
         }

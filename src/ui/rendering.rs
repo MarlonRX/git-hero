@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::theme::Theme;
-use super::state::AppState;
+use super::state::{AppState, GitCommit};
 
 /// Replace home directory with ~ for readable display
 fn short_path(path: &str) -> String {
@@ -56,6 +56,157 @@ pub fn draw_solid_hline(f: &mut Frame, x: u16, y: u16, width: u16, color: ratatu
         Paragraph::new("\u{2588}".repeat(width as usize)).style(s),
         Rect { x, y, width, height: 1 },
     );
+}
+
+/// Parsea el diff y lo convierte en líneas lado-a-lado (antes | después)
+/// Blend a color with background at given opacity (0.0 = bg only, 1.0 = full color)
+fn soften(color: ratatui::style::Color, bg: ratatui::style::Color, opacity: f32) -> ratatui::style::Color {
+    use ratatui::style::Color;
+    let to_rgb = |c: Color| -> (u8, u8, u8) {
+        match c {
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::Red => (255, 60, 60),
+            Color::Green => (60, 255, 60),
+            Color::Yellow => (255, 255, 0),
+            Color::Blue => (0, 0, 255),
+            Color::Black => (0, 0, 0),
+            Color::White => (255, 255, 255),
+            _ => (128, 128, 128),
+        }
+    };
+    let (br, bg_c, bb) = to_rgb(bg);
+    let (cr, cg, cb) = to_rgb(color);
+    let r = (br as f32 * (1.0 - opacity) + cr as f32 * opacity) as u8;
+    let g = (bg_c as f32 * (1.0 - opacity) + cg as f32 * opacity) as u8;
+    let b = (bb as f32 * (1.0 - opacity) + cb as f32 * opacity) as u8;
+    Color::Rgb(r, g, b)
+}
+
+/// Robust side-by-side diff renderer. Same simple pattern: split + take + map.
+/// No pairing logic, no accumulation, guaranteed termination.
+pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Line<'static>> {
+    let half = (width.saturating_sub(3) / 2) as usize; // -3 for " │ " separator
+    if half < 10 { return render_diff_lines(diff, theme); } // fallback for tiny widths
+    
+    let warn_bg = soften(theme.warning, theme.background, 0.25);
+    let succ_bg = soften(theme.success, theme.background, 0.25);
+    
+    diff.split('\n')
+        .take(200)
+        .map(|line| {
+            // ── Full-width headers (truncated to fit) ──
+            let max_w = width as usize;
+            let trunc = |s: &str| -> String { s.chars().take(max_w).collect() };
+            
+            if line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("commit ") {
+                return Line::from(Span::styled(
+                    trunc(line),
+                    Style::default().fg(theme.accent).bg(theme.background).add_modifier(Modifier::BOLD)
+                ));
+            }
+            if line.starts_with("@@") {
+                return Line::from(Span::styled(
+                    format!("{:<width$}", trunc(line), width = max_w),
+                    Style::default().fg(theme.primary).bg(theme.surface).add_modifier(Modifier::BOLD)
+                ));
+            }
+            if line.starts_with("Author:") || line.starts_with("Date:") {
+                return Line::from(Span::styled(
+                    trunc(line),
+                    Style::default().fg(theme.dimmed).bg(theme.background)
+                ));
+            }
+            if line.trim().is_empty() {
+                return Line::from(Span::raw(""));
+            }
+            
+            // ── Side-by-side columns: truncate then pad to fit ──
+            let fit = |s: &str| -> String {
+                let truncated: String = s.chars().take(half).collect();
+                format!("{:<width$}", truncated, width = half)
+            };
+            
+            if line.starts_with('-') && !line.starts_with("---") {
+                // Removed → LEFT column only
+                let text = if line.len() > 1 { &line[1..] } else { "" };
+                Line::from(vec![
+                    Span::styled(fit(text), Style::default().fg(theme.foreground).bg(warn_bg)),
+                    Span::styled(" │ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(fit(""), Style::default().bg(theme.background)),
+                ])
+            } else if line.starts_with('+') && !line.starts_with("+++") {
+                // Added → RIGHT column only
+                let text = if line.len() > 1 { &line[1..] } else { "" };
+                Line::from(vec![
+                    Span::styled(fit(""), Style::default().bg(theme.background)),
+                    Span::styled(" │ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(fit(text), Style::default().fg(theme.foreground).bg(succ_bg)),
+                ])
+            } else if line.starts_with("---") || line.starts_with("+++") {
+                // File paths → both sides with accent
+                let text = &line[4..];
+                let col = fit(text);
+                Line::from(vec![
+                    Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
+                    Span::styled(" │ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
+                ])
+            } else if line.starts_with(' ') {
+                // Context → both columns
+                let text = if line.len() > 1 { &line[1..] } else { "" };
+                let col = fit(text);
+                Line::from(vec![
+                    Span::styled(col.clone(), Style::default().fg(theme.foreground).bg(theme.background)),
+                    Span::styled(" │ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(col, Style::default().fg(theme.foreground).bg(theme.background)),
+                ])
+            } else {
+                // Unknown → simple line
+                Line::from(Span::styled(line.to_string(), Style::default().fg(theme.foreground).bg(theme.background)))
+            }
+        })
+        .collect()
+}
+
+/// Simple line-by-line diff renderer. Reliable, fast, no hangs.
+pub fn render_diff_lines(diff: &str, theme: &Theme) -> Vec<Line<'static>> {
+    let warn_bg = soften(theme.warning, theme.background, 0.25);
+    let succ_bg = soften(theme.success, theme.background, 0.25);
+    
+    // Take at most 200 lines to absolutely guarantee no hangs
+    diff.split('\n')
+        .take(200)
+        .map(|line| {
+            if line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("commit ") {
+                let truncated = if line.len() > 120 { &line[..120] } else { line };
+                Line::from(Span::styled(
+                    truncated.to_string(),
+                    Style::default().fg(theme.accent).bg(theme.background).add_modifier(Modifier::BOLD)
+                ))
+            } else if line.starts_with("@@") {
+                Line::from(Span::styled(line.to_string(),
+                    Style::default().fg(theme.primary).bg(theme.surface).add_modifier(Modifier::BOLD)))
+            } else if line.starts_with('+') && !line.starts_with("+++") {
+                let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                Line::from(vec![
+                    Span::styled("+".to_string(), Style::default().fg(theme.foreground).bg(succ_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(rest, Style::default().fg(theme.foreground).bg(succ_bg)),
+                ])
+            } else if line.starts_with('-') && !line.starts_with("---") {
+                let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                Line::from(vec![
+                    Span::styled("-".to_string(), Style::default().fg(theme.foreground).bg(warn_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(rest, Style::default().fg(theme.foreground).bg(warn_bg)),
+                ])
+            } else if line.starts_with("Author:") || line.starts_with("Date:") || line.starts_with("---") || line.starts_with("+++") {
+                Line::from(Span::styled(line.to_string(), Style::default().fg(theme.dimmed).bg(theme.background)))
+            } else if line.trim().is_empty() {
+                Line::from(Span::raw(""))
+            } else {
+                Line::from(Span::styled(line.to_string(), Style::default().fg(theme.foreground).bg(theme.background)))
+            }
+        })
+        .collect()
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -541,15 +692,57 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             files_inner,
         );
     } else {
+        // Count file types for indicators
+        let mut added_count = 0;
+        let mut modified_count = 0;
+        let mut deleted_count = 0;
+        let mut untracked_count = 0;
+        
+        for file in &s.files {
+            match file.status.as_str() {
+                "A" => added_count += 1,
+                "M" | "MM" => modified_count += 1,
+                "D" => deleted_count += 1,
+                "??" => untracked_count += 1,
+                _ => {}
+            }
+        }
+        
+        // Build indicator line
+        let mut indicators = Vec::new();
+        if added_count > 0 {
+            indicators.push(format!("{}{}", s.get_icon_str("add"), added_count));
+        }
+        if modified_count > 0 {
+            indicators.push(format!("{}{}", s.get_icon_str("mod"), modified_count));
+        }
+        if deleted_count > 0 {
+            indicators.push(format!("{}{}", s.get_icon_str("del"), deleted_count));
+        }
+        if untracked_count > 0 {
+            indicators.push(format!("{}{}", s.get_icon_str("untracked"), untracked_count));
+        }
+        
+        let indicator_text = if indicators.is_empty() {
+            String::new()
+        } else {
+            format!(" [{}] ", indicators.join(" "))
+        };
+        
+        // Render files with enhanced indicators
         let items: Vec<ListItem> = s.files.iter().enumerate().map(|(i, f)| {
             let fg = if f.staged { s.theme.success } else if f.status == "??" { s.theme.dimmed } else { s.theme.warning };
             let cb = if f.staged { "[\u{2713}]" } else { "[ ]" };
-            let icon = match f.status.as_str() {
-                "A" => s.get_icon_str("add"),
-                "D" => s.get_icon_str("del"),
-                "??" => s.get_icon_str("untracked"),
-                _ => s.get_icon_str("mod"),
+            
+            // Enhanced icon based on status
+            let (icon, icon_color) = match f.status.as_str() {
+                "A" => (s.get_icon_str("add"), s.theme.success),
+                "D" => (s.get_icon_str("del"), s.theme.warning),
+                "??" => (s.get_icon_str("untracked"), s.theme.dimmed),
+                "M" | "MM" => (s.get_icon_str("mod"), s.theme.accent),
+                _ => (s.get_icon_str("mod"), fg),
             };
+            
             let pre = if i == s.selected_file_idx && s.focus_pane == "files" { "\u{25B6} " } else { "  " };
 
             let style = if i == s.selected_file_idx && s.focus_pane == "files" {
@@ -557,9 +750,35 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             } else {
                 Style::default().fg(fg).bg(s.theme.background)
             };
-            ListItem::new(format!("{}{} {} {}", pre, cb, icon, f.path)).style(style)
+            
+            // Create multi-colored line for better readability
+            let line = Line::from(vec![
+                Span::raw(pre),
+                Span::styled(cb, Style::default().fg(if f.staged { s.theme.success } else { s.theme.dimmed }).bg(s.theme.background)),
+                Span::raw(" "),
+                Span::styled(icon, Style::default().fg(icon_color).bg(s.theme.background)),
+                Span::raw(" "),
+                Span::styled(&f.path, style),
+            ]);
+            
+            ListItem::new(line)
         }).collect();
-        f.render_widget(List::new(items).style(Style::default().bg(s.theme.background)), files_inner);
+        
+        // Add indicator text as first item if we have space
+        let all_items = if !indicator_text.is_empty() {
+            let mut all = vec![ListItem::new(
+                Line::from(Span::styled(
+                    indicator_text.trim(),
+                    Style::default().fg(s.theme.dimmed).bg(s.theme.background).add_modifier(Modifier::BOLD)
+                ))
+            )];
+            all.extend(items);
+            all
+        } else {
+            items
+        };
+        
+        f.render_widget(List::new(all_items).style(Style::default().bg(s.theme.background)), files_inner);
     }
 
     // ── SHORTCUTS ─────────────────────────────────────────────────
@@ -580,7 +799,8 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         Line::from(Span::styled(" d Stash pop  n New branch", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
         Line::from(Span::styled(" b Branches   o Remote", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
         Line::from(Span::styled(" t Theme      Spc Stage", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" Tab Focus    ? Help  q Quit", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
+        Line::from(Span::styled(" Enter Detail y Copy diff", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
+        Line::from(Span::styled(" Scroll: PgUp/PgDn or Mouse  ? Help q Quit", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
     ];
     f.render_widget(Paragraph::new(lines).style(Style::default().bg(s.theme.background)), shortcuts_inner);
 
@@ -597,44 +817,47 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     if s.focus_pane == "commits" && !s.commits.is_empty() && s.selected_commit_idx < s.commits.len() {
         diff_title = format!(" COMMIT: {} ", s.commits[s.selected_commit_idx].hash);
     } else if !s.files.is_empty() && s.selected_file_idx < s.files.len() {
-        diff_title = format!(" DIFF: {} ", s.files[s.selected_file_idx].path);
+        diff_title = format!(" {} DIFF: {} {} ", 
+            if s.focus_pane == "diff" { "▼" } else { "" },
+            s.files[s.selected_file_idx].path,
+            if s.focus_pane == "diff" { "▼" } else { "" },
+        );
     }
+    let diff_title_style = if s.focus_pane == "diff" {
+        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(s.theme.accent).add_modifier(Modifier::BOLD)
+    };
     let diff_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(s.theme.border))
         .title(diff_title)
-        .title_style(Style::default().fg(s.theme.accent).add_modifier(Modifier::BOLD));
+        .title_style(diff_title_style);
     f.render_widget(diff_block.clone(), diff_area);
     let diff_inner = diff_block.inner(diff_area);
 
-    let dlines: Vec<Line> = s.active_diff.split('\n')
+    // Side-by-side diff rendering - robust, no hangs. Scrolled via diff_scroll_offset
+    let dlines = s.get_cached_diff_lines(diff_inner.width);
+    let visible: Vec<Line> = dlines.iter()
         .skip(s.diff_scroll_offset)
         .take(diff_inner.height as usize)
-        .map(|line| {
-            let fg = if line.starts_with('+') && !line.starts_with("+++") {
-                s.theme.success
-            } else if line.starts_with('-') && !line.starts_with("---") {
-                s.theme.warning
-            } else if line.starts_with("@@") {
-                s.theme.primary
-            } else if line.starts_with("commit ") || line.starts_with("diff ") || line.starts_with("Author:") || line.starts_with("Date:") {
-                s.theme.accent
-            } else {
-                s.theme.foreground
-            };
-            Line::from(Span::styled(line, Style::default().fg(fg).bg(s.theme.background)))
-        })
+        .cloned()
         .collect();
-    f.render_widget(Paragraph::new(dlines).style(Style::default().bg(s.theme.background)), diff_inner);
+    f.render_widget(Paragraph::new(visible).style(Style::default().bg(s.theme.background)), diff_inner);
 
     // Commits block - recuadro fijo con borde
     let commit_area = right_chunks[1];
+    let commits_title = if s.show_commit_detail {
+        " COMMIT DETAILS (Enter to close) ".to_string()
+    } else {
+        " COMMITS (Enter for details) ".to_string()
+    };
     let commits_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
         .border_style(Style::default().fg(s.theme.border))
-        .title(" COMMITS ")
+        .title(commits_title)
         .title_style(if s.focus_pane == "commits" {
             Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD)
         } else {
@@ -649,20 +872,62 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
                 .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
             commits_inner,
         );
+    } else if s.show_commit_detail && !s.commit_detail_diff.is_empty() {
+        // Show detailed commit view with diff (with scroll)
+        let commit_theme = s.theme.clone();
+        let c_warn = soften(commit_theme.warning, commit_theme.background, 0.25);
+        let c_succ = soften(commit_theme.success, commit_theme.background, 0.25);
+        let detail_lines: Vec<Line> = s.commit_detail_diff.split('\n')
+            .skip(s.commit_detail_scroll)
+            .take(commits_inner.height as usize)
+            .map(|line| {
+                if line.starts_with("commit ") {
+                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.accent).bg(commit_theme.background).add_modifier(Modifier::BOLD)))
+                } else if line.starts_with("@@") {
+                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.primary).bg(commit_theme.surface).add_modifier(Modifier::BOLD)))
+                } else if line.starts_with('+') && !line.starts_with("+++") {
+                    let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                    Line::from(vec![
+                        Span::styled("+".to_string(), Style::default().fg(commit_theme.foreground).bg(c_succ).add_modifier(Modifier::BOLD)),
+                        Span::styled(rest, Style::default().fg(commit_theme.foreground).bg(c_succ)),
+                    ])
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                    Line::from(vec![
+                        Span::styled("-".to_string(), Style::default().fg(commit_theme.foreground).bg(c_warn).add_modifier(Modifier::BOLD)),
+                        Span::styled(rest, Style::default().fg(commit_theme.foreground).bg(c_warn)),
+                    ])
+                } else if line.starts_with("Author:") || line.starts_with("Date:") || line.starts_with("---") || line.starts_with("+++") {
+                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.dimmed).bg(commit_theme.background)))
+                } else if line.trim().is_empty() {
+                    Line::from(Span::raw(""))
+                } else {
+                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.foreground).bg(commit_theme.background)))
+                }
+            })
+            .collect();
+        f.render_widget(Paragraph::new(detail_lines).style(Style::default().bg(s.theme.background)), commits_inner);
     } else {
-        let items: Vec<ListItem> = s.commits.iter().enumerate().map(|(i, c)| {
-            let pre = if i == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
+        // Normal commit list view (with scroll)
+        let visible_commits: Vec<&GitCommit> = s.commits.iter()
+            .skip(s.commit_scroll_offset)
+            .take(commits_inner.height as usize)
+            .collect();
+        
+        let items: Vec<ListItem> = visible_commits.iter().enumerate().map(|(i, c)| {
+            let actual_idx = s.commits.iter().position(|commit| commit.hash == c.hash).unwrap_or(i);
+            let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
             let mut subj = c.subject.clone();
             let sw = right.width.saturating_sub(30) as usize;
             if subj.len() > sw.max(5) { subj = format!("{}...", &subj[..sw.max(5) - 3]); }
 
-            let item_s = if i == s.selected_commit_idx && s.focus_pane == "commits" {
+            let item_s = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
                 Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().bg(s.theme.background)
             };
 
-            let line = if i == s.selected_commit_idx && s.focus_pane == "commits" {
+            let line = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
                 Line::from(vec![
                     Span::raw(format!("{}{}", pre, c.hash)),
                     Span::raw(format!("  ({})", c.date)),

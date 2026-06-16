@@ -46,6 +46,17 @@ pub struct AppState {
     pub focus_pane: String,
     pub active_diff: String,
     pub diff_scroll_offset: usize,
+    pub commit_scroll_offset: usize,  // Scroll offset for commits panel
+    
+    // ── Commit Detail View ────────────────────────────────────────
+    pub show_commit_detail: bool,  // Show detailed commit info when clicking/entering on commit
+    pub commit_detail_diff: String,  // Diff for the selected commit
+    pub commit_detail_scroll: usize,  // Scroll for commit detail view
+    
+    // ── Diff Cache (performance) ─────────────────────────────────
+    cached_diff_content: String,
+    cached_diff_lines: Vec<ratatui::text::Line<'static>>,
+    cached_diff_width: u16,  // Width used for side-by-side rendering
 
     // ── Command Input ──────────────────────────────────────────────
     pub input_value: String,
@@ -103,6 +114,13 @@ impl AppState {
             focus_pane: "files".to_string(),
             active_diff: String::new(),
             diff_scroll_offset: 0,
+            commit_scroll_offset: 0,
+            show_commit_detail: false,
+            commit_detail_diff: String::new(),
+            commit_detail_scroll: 0,
+            cached_diff_content: String::new(),
+            cached_diff_lines: Vec::new(),
+            cached_diff_width: 0,
             input_value: String::new(),
             input_cursor_pos: 0,
             show_input: false,
@@ -171,17 +189,31 @@ impl AppState {
                 if line.len() < 4 {
                     continue;
                 }
-                let status = line[0..2].to_string();
-                let mut path = line[3..].to_string();
-                if path.starts_with('"') && path.ends_with('"') {
-                    path = path[1..path.len() - 1].to_string();
-                }
-                let staged = status.chars().next().unwrap_or(' ') != ' '
-                    && status.chars().next().unwrap_or(' ') != '?';
+                // Format: XY path (X=index/staged, Y=working tree)
+                let x = line.chars().next().unwrap_or(' ');  // staged status
+                let y = line.chars().nth(1).unwrap_or(' ');  // working tree status
+                let path = line[3..].to_string();
+                
+                // A file is staged if X is not space and not '?'
+                let staged = x != ' ' && x != '?';
+                
+                // Determine the display status
+                let status = if x != ' ' && x != '?' {
+                    // Has staged changes - show the staged status
+                    x.to_string()
+                } else if y != ' ' && y != '?' {
+                    // Only working tree changes
+                    y.to_string()
+                } else if x == '?' || y == '?' {
+                    "?".to_string()
+                } else {
+                    format!("{}{}", x, y)
+                };
+                
                 files.push(GitFile {
                     path,
                     staged,
-                    status: status.trim().to_string(),
+                    status,
                 });
             }
         }
@@ -253,6 +285,27 @@ impl AppState {
         } else {
             self.active_diff = "Working directory clean.".to_string();
         }
+        // Invalidate cache when diff content changes
+        self.cached_diff_content.clear();
+        self.cached_diff_lines.clear();
+        self.cached_diff_width = 0;
+    }
+
+    /// Returns cached side-by-side diff lines, recomputing only if diff or width changed.
+    pub fn get_cached_diff_lines(&mut self, width: u16) -> Vec<ratatui::text::Line<'static>> {
+        let needs_recompute = self.cached_diff_content != self.active_diff 
+                           || self.cached_diff_width != width;
+        
+        if needs_recompute {
+            crate::log_debug(&format!("Diff cache miss: {} bytes, width={}", self.active_diff.len(), width));
+            self.cached_diff_content = self.active_diff.clone();
+            self.cached_diff_width = width;
+            self.cached_diff_lines = super::rendering::render_diff_side_by_side(
+                &self.active_diff, width, &self.theme
+            );
+            crate::log_debug(&format!("Diff cached: {} lines", self.cached_diff_lines.len()));
+        }
+        self.cached_diff_lines.clone()
     }
 
     pub fn toggle_stage_file(&mut self, idx: usize) {
