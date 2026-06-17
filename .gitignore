@@ -1,5 +1,6 @@
 # Rust build artifacts
 /target
+/git-hero-promo
 **/*.rs.bk
 **/*.pdb
 
