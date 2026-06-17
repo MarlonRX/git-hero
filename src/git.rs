@@ -37,7 +37,7 @@ pub fn run_git(args: &[&str]) -> Result<String, String> {
             if output.status.success() {
                 let s = str::from_utf8(&output.stdout)
                     .unwrap_or("")
-                    .trim()
+                    .trim_end()
                     .to_string();
                 Ok(s)
             } else {
@@ -231,4 +231,93 @@ pub fn git_stash_pop() -> Result<(), String> {
 /// Get the full diff for a commit
 pub fn git_diff_commit(commit_hash: &str) -> Result<String, String> {
     run_git(&["show", "--format=", commit_hash])
+}
+
+// ── Asynchronous execution with Askpass ───────────────────────────
+
+pub fn run_git_async(
+    args: Vec<String>,
+    session_id: String,
+    tx: std::sync::mpsc::Sender<crate::ui::state::TuiMessage>,
+) {
+    let tx_clone = tx.clone();
+    std::thread::spawn(move || {
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(&args);
+        
+        // Point Askpass to current executable
+        if let Ok(exe) = std::env::current_exe() {
+            cmd.env("GIT_ASKPASS", &exe);
+            cmd.env("SSH_ASKPASS", &exe);
+            cmd.env("SSH_ASKPASS_REQUIRE", "force");
+            cmd.env("GIT_HERO_SESSION_ID", &session_id);
+            // Disable default terminal prompts so it falls back to ASKPASS
+            cmd.env("GIT_TERMINAL_PROMPT", "0");
+        }
+
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        cmd.stdin(std::process::Stdio::null());
+
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx_clone.send(crate::ui::state::TuiMessage::ConsoleOutput(format!("Failed to spawn git: {}\n", e)));
+                let _ = tx_clone.send(crate::ui::state::TuiMessage::CommandFinished(Err(e.to_string())));
+                return;
+            }
+        };
+
+        let mut stdout = child.stdout.take().unwrap();
+        let mut stderr = child.stderr.take().unwrap();
+
+        let tx_stdout = tx_clone.clone();
+        let stdout_thread = std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0; 128];
+            loop {
+                match stdout.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                            let _ = tx_stdout.send(crate::ui::state::TuiMessage::ConsoleOutput(s.to_string()));
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let tx_stderr = tx_clone.clone();
+        let stderr_thread = std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = [0; 128];
+            loop {
+                match stderr.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                            let _ = tx_stderr.send(crate::ui::state::TuiMessage::ConsoleOutput(s.to_string()));
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let _ = stdout_thread.join();
+        let _ = stderr_thread.join();
+
+        match child.wait() {
+            Ok(status) if status.success() => {
+                let _ = tx_clone.send(crate::ui::state::TuiMessage::CommandFinished(Ok(())));
+            }
+            Ok(status) => {
+                let _ = tx_clone.send(crate::ui::state::TuiMessage::CommandFinished(Err(format!("Command failed with exit status: {}", status))));
+            }
+            Err(e) => {
+                let _ = tx_clone.send(crate::ui::state::TuiMessage::CommandFinished(Err(e.to_string())));
+            }
+        }
+    });
 }
