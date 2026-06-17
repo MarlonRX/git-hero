@@ -37,3 +37,7 @@ logs/
 *.bak
 *.tmp
 *.orig
+
+# Local development plans
+/plans/
+/PLANS/
