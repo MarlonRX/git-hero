@@ -384,3 +384,193 @@ pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
     );
 }
+
+// ── Push Confirmation Modal ───────────────────────────────────────
+
+pub fn draw_confirm_push_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 50u16;
+    let mh = 8u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    let inner = draw_modal_frame(f, modal, s.theme.background, s.theme.border);
+    draw_modal_title(f, modal, " 🚀 Push Confirmation ", s.theme.background, s.theme.accent);
+
+    let text = format!("Are you sure you want to push to remote?\n\nTarget: {}/{}", s.remote, s.branch);
+    
+    f.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
+        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+    );
+
+    let help = "Press [y] / [Enter] to Confirm | [n] / [Esc] to Cancel";
+    f.render_widget(
+        Paragraph::new(help).alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}
+
+// ── Pull Confirmation Modal ───────────────────────────────────────
+
+pub fn draw_confirm_pull_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 50u16;
+    let mh = 8u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    let inner = draw_modal_frame(f, modal, s.theme.background, s.theme.border);
+    draw_modal_title(f, modal, " 📥 Pull Confirmation ", s.theme.background, s.theme.accent);
+
+    let text = format!("Are you sure you want to pull from remote?\n\nSource: {}/{}", s.remote, s.branch);
+    
+    f.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
+        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+    );
+
+    let help = "Press [y] / [Enter] to Confirm | [n] / [Esc] to Cancel";
+    f.render_widget(
+        Paragraph::new(help).alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}
+
+// ── Credentials Input Modal ───────────────────────────────────────
+
+pub fn draw_credentials_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 60u16;
+    let mh = 10u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    let inner = draw_modal_frame(f, modal, s.theme.background, s.theme.border);
+    draw_modal_title(f, modal, " 🔑 Remote Credentials Required ", s.theme.background, s.theme.primary);
+
+    let prompt_text = format!("Prompt: {}", s.credentials_prompt);
+    f.render_widget(
+        Paragraph::new(prompt_text)
+            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
+        Rect { x: inner.x + 2, y: inner.y + 1, width: inner.width - 4, height: 2 },
+    );
+
+    let input_y = inner.y + 3;
+    let input_w = inner.width - 4;
+    f.render_widget(
+        Paragraph::new(" ".repeat(input_w as usize))
+            .style(Style::default().bg(s.theme.surface)),
+        Rect { x: inner.x + 2, y: input_y, width: input_w, height: 1 },
+    );
+
+    let displayed_input = if s.credentials_mask {
+        "*".repeat(s.credentials_input.len())
+    } else {
+        s.credentials_input.clone()
+    };
+    f.render_widget(
+        Paragraph::new(displayed_input)
+            .style(Style::default().fg(s.theme.accent).bg(s.theme.surface)),
+        Rect { x: inner.x + 3, y: input_y, width: input_w - 2, height: 1 },
+    );
+
+    let cx = inner.x + 3 + s.credentials_cursor as u16;
+    if cx < inner.x + 2 + input_w {
+        f.render_widget(
+            Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
+            Rect { x: cx, y: input_y, width: 1, height: 1 },
+        );
+    }
+
+    let help = "Enter: Submit | Esc: Cancel";
+    f.render_widget(
+        Paragraph::new(help).alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}
+
+// ── Multiline Commit Message Editor Modal ─────────────────────────
+
+pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 70u16;
+    let mh = 16u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    let inner = draw_modal_frame(f, modal, s.theme.background, s.theme.border);
+    draw_modal_title(f, modal, " 📝 Multiline Commit Message ", s.theme.background, s.theme.accent);
+
+    let max_lines = inner.height.saturating_sub(2) as usize;
+    if s.commit_cursor_row >= s.commit_modal_scroll + max_lines {
+        s.commit_modal_scroll = s.commit_cursor_row - max_lines + 1;
+    } else if s.commit_cursor_row < s.commit_modal_scroll {
+        s.commit_modal_scroll = s.commit_cursor_row;
+    }
+
+    let text_area = Rect {
+        x: inner.x + 2,
+        y: inner.y + 1,
+        width: inner.width - 4,
+        height: inner.height - 2,
+    };
+    
+    for row in text_area.y..text_area.y + text_area.height {
+        f.render_widget(
+            Paragraph::new(" ".repeat(text_area.width as usize))
+                .style(Style::default().bg(s.theme.surface)),
+            Rect { x: text_area.x, y: row, width: text_area.width, height: 1 },
+        );
+    }
+
+    let visible_lines: Vec<String> = s.commit_message_lines
+        .iter()
+        .skip(s.commit_modal_scroll)
+        .take(max_lines)
+        .cloned()
+        .collect();
+
+    for (i, line) in visible_lines.iter().enumerate() {
+        f.render_widget(
+            Paragraph::new(line.clone())
+                .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
+            Rect {
+                x: text_area.x + 1,
+                y: text_area.y + i as u16,
+                width: text_area.width - 2,
+                height: 1,
+            },
+        );
+    }
+
+    let relative_row = s.commit_cursor_row.saturating_sub(s.commit_modal_scroll);
+    if relative_row < max_lines {
+        let cx = text_area.x + 1 + s.commit_cursor_col as u16;
+        let cy = text_area.y + relative_row as u16;
+        if cx < text_area.x + text_area.width - 1 {
+            f.render_widget(
+                Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
+                Rect { x: cx, y: cy, width: 1, height: 1 },
+            );
+        }
+    }
+
+    let help = "Enter: New line | Ctrl+Enter or Ctrl+S: Confirm | Esc: Cancel";
+    f.render_widget(
+        Paragraph::new(help).alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}

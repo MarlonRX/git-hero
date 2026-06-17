@@ -3,7 +3,7 @@
 
 use std::io::Stdout;
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 use crate::config::{save_config, Config};
@@ -13,7 +13,33 @@ use crate::theme::{get_theme_by_name, get_themes};
 use crate::ui::state::AppState;
 
 /// Returns false if the app should quit
-pub fn handle_key_event(code: KeyCode, s: &mut AppState) -> bool {
+pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
+    let code = key.code;
+
+    // ── Credentials Modal ─────────────────────────────────────────
+    if s.show_credentials_modal {
+        handle_credentials_key(key, s);
+        return true;
+    }
+
+    // ── Commit Modal ──────────────────────────────────────────────
+    if s.show_commit_modal {
+        handle_commit_modal_key(key, s);
+        return true;
+    }
+
+    // ── Confirm Push Modal ────────────────────────────────────────
+    if s.show_confirm_push {
+        handle_confirm_push_key(code, s);
+        return true;
+    }
+
+    // ── Confirm Pull Modal ────────────────────────────────────────
+    if s.show_confirm_pull {
+        handle_confirm_pull_key(code, s);
+        return true;
+    }
+
     // ── Setup Wizard ─────────────────────────────────────────────
     if s.setup_step > 0 {
         handle_setup_key(code, s);
@@ -401,7 +427,13 @@ fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::Char('n') | KeyCode::Char('N') => { s.show_input = true; s.input_value = "/branch ".into(); s.input_cursor_pos = 8; s.update_suggestions(); }
         KeyCode::Char('o') | KeyCode::Char('O') => { s.show_input = true; s.input_value = "/remote ".into(); s.input_cursor_pos = 8; }
         // ── Original shortcuts ──────────────────────────────────
-        KeyCode::Char('c') | KeyCode::Char('C') => { s.show_input = true; s.input_value = "/commit ".into(); s.input_cursor_pos = 8; }
+        KeyCode::Char('c') | KeyCode::Char('C') => {
+            s.show_commit_modal = true;
+            s.commit_message_lines = vec![String::new()];
+            s.commit_cursor_row = 0;
+            s.commit_cursor_col = 0;
+            s.commit_modal_scroll = 0;
+        }
         KeyCode::Char('p') | KeyCode::Char('P') => s.execute_command("/push"),
         KeyCode::Char('f') | KeyCode::Char('F') => s.execute_command("/fetch"),
         KeyCode::Char('l') | KeyCode::Char('L') => s.execute_command("/pull"),
@@ -736,5 +768,193 @@ pub fn handle_mouse_scroll(
             // Could add file list scroll here if needed in the future
             // For now, just ignore sidebar scroll
         }
+    }
+}
+
+// ── New Modal Key Handlers ─────────────────────────────────────────
+
+fn handle_confirm_push_key(code: KeyCode, s: &mut AppState) {
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            s.show_confirm_push = false;
+            s.run_push();
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            s.show_confirm_push = false;
+        }
+        _ => {}
+    }
+}
+
+fn handle_confirm_pull_key(code: KeyCode, s: &mut AppState) {
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            s.show_confirm_pull = false;
+            s.run_pull();
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            s.show_confirm_pull = false;
+        }
+        _ => {}
+    }
+}
+
+fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
+    match key.code {
+        KeyCode::Enter => {
+            let session_id = &s.session_id;
+            let response_path = std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
+            let _ = std::fs::write(&response_path, &s.credentials_input);
+            s.show_credentials_modal = false;
+            s.credentials_input.clear();
+            s.credentials_cursor = 0;
+        }
+        KeyCode::Esc => {
+            let session_id = &s.session_id;
+            let response_path = std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
+            let _ = std::fs::write(&response_path, "");
+            s.show_credentials_modal = false;
+            s.credentials_input.clear();
+            s.credentials_cursor = 0;
+        }
+        KeyCode::Char(c) => {
+            s.credentials_input.insert(s.credentials_cursor, c);
+            s.credentials_cursor += 1;
+        }
+        KeyCode::Backspace => {
+            if s.credentials_cursor > 0 {
+                s.credentials_cursor -= 1;
+                s.credentials_input.remove(s.credentials_cursor);
+            }
+        }
+        KeyCode::Delete => {
+            if s.credentials_cursor < s.credentials_input.len() {
+                s.credentials_input.remove(s.credentials_cursor);
+            }
+        }
+        KeyCode::Left => {
+            s.credentials_cursor = s.credentials_cursor.saturating_sub(1);
+        }
+        KeyCode::Right => {
+            if s.credentials_cursor < s.credentials_input.len() {
+                s.credentials_cursor += 1;
+            }
+        }
+        _ => {}
+    }
+}
+
+fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
+    let code = key.code;
+    let mods = key.modifiers;
+    
+    // Confirm commit: Ctrl+Enter, Ctrl+S, or Ctrl+D
+    if (code == KeyCode::Enter && mods.contains(KeyModifiers::CONTROL))
+        || (code == KeyCode::Char('s') && mods.contains(KeyModifiers::CONTROL))
+        || (code == KeyCode::Char('d') && mods.contains(KeyModifiers::CONTROL))
+    {
+        let msg = s.commit_message_lines.join("\n");
+        let msg = msg.trim();
+        if msg.is_empty() {
+            s.status_message = "Error: commit message empty.".to_string();
+            return;
+        }
+        let has_staged = s.files.iter().any(|f| f.staged);
+        if !has_staged {
+            let _ = git::git_add_all();
+        }
+        if let Err(e) = git::git_commit(msg) {
+            s.status_message = format!("Error committing: {}", e);
+        } else {
+            s.selected_file_idx = 0;
+            s.selected_commit_idx = 0;
+            s.diff_scroll_offset = 0;
+            s.refresh_git_status();
+            s.status_message = translate(&s.language, "status_commit_success");
+            s.show_commit_modal = false;
+        }
+        return;
+    }
+
+    match code {
+        KeyCode::Esc => {
+            s.show_commit_modal = false;
+        }
+        KeyCode::Enter => {
+            let current_line = &s.commit_message_lines[s.commit_cursor_row];
+            let (before, after) = current_line.split_at(s.commit_cursor_col);
+            let before_str = before.to_string();
+            let after_str = after.to_string();
+            
+            s.commit_message_lines[s.commit_cursor_row] = before_str;
+            s.commit_message_lines.insert(s.commit_cursor_row + 1, after_str);
+            s.commit_cursor_row += 1;
+            s.commit_cursor_col = 0;
+        }
+        KeyCode::Backspace => {
+            if s.commit_cursor_col > 0 {
+                let current_line = &mut s.commit_message_lines[s.commit_cursor_row];
+                current_line.remove(s.commit_cursor_col - 1);
+                s.commit_cursor_col -= 1;
+            } else if s.commit_cursor_row > 0 {
+                let current_line = s.commit_message_lines.remove(s.commit_cursor_row);
+                s.commit_cursor_row -= 1;
+                let prev_line = &mut s.commit_message_lines[s.commit_cursor_row];
+                s.commit_cursor_col = prev_line.len();
+                prev_line.push_str(&current_line);
+            }
+        }
+        KeyCode::Delete => {
+            let current_line_len = s.commit_message_lines[s.commit_cursor_row].len();
+            if s.commit_cursor_col < current_line_len {
+                let current_line = &mut s.commit_message_lines[s.commit_cursor_row];
+                current_line.remove(s.commit_cursor_col);
+            } else if s.commit_cursor_row + 1 < s.commit_message_lines.len() {
+                let next_line = s.commit_message_lines.remove(s.commit_cursor_row + 1);
+                let current_line = &mut s.commit_message_lines[s.commit_cursor_row];
+                current_line.push_str(&next_line);
+            }
+        }
+        KeyCode::Left => {
+            if s.commit_cursor_col > 0 {
+                s.commit_cursor_col -= 1;
+            } else if s.commit_cursor_row > 0 {
+                s.commit_cursor_row -= 1;
+                s.commit_cursor_col = s.commit_message_lines[s.commit_cursor_row].len();
+            }
+        }
+        KeyCode::Right => {
+            let current_line_len = s.commit_message_lines[s.commit_cursor_row].len();
+            if s.commit_cursor_col < current_line_len {
+                s.commit_cursor_col += 1;
+            } else if s.commit_cursor_row + 1 < s.commit_message_lines.len() {
+                s.commit_cursor_row += 1;
+                s.commit_cursor_col = 0;
+            }
+        }
+        KeyCode::Up => {
+            if s.commit_cursor_row > 0 {
+                s.commit_cursor_row -= 1;
+                let prev_len = s.commit_message_lines[s.commit_cursor_row].len();
+                if s.commit_cursor_col > prev_len {
+                    s.commit_cursor_col = prev_len;
+                }
+            }
+        }
+        KeyCode::Down => {
+            if s.commit_cursor_row + 1 < s.commit_message_lines.len() {
+                s.commit_cursor_row += 1;
+                let next_len = s.commit_message_lines[s.commit_cursor_row].len();
+                if s.commit_cursor_col > next_len {
+                    s.commit_cursor_col = next_len;
+                }
+            }
+        }
+        KeyCode::Char(c) => {
+            let current_line = &mut s.commit_message_lines[s.commit_cursor_row];
+            current_line.insert(s.commit_cursor_col, c);
+            s.commit_cursor_col += 1;
+        }
+        _ => {}
     }
 }

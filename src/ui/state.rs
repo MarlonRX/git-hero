@@ -9,6 +9,12 @@ use crate::git;
 use crate::i18n::translate;
 use crate::theme::{get_theme_by_name, get_themes, Theme};
 
+#[derive(Debug, Clone)]
+pub enum TuiMessage {
+    ConsoleOutput(String),
+    CommandFinished(Result<(), String>),
+}
+
 #[derive(Clone)]
 pub struct GitFile {
     pub path: String,
@@ -92,6 +98,26 @@ pub struct AppState {
     pub init_branch_name: String,
     pub init_remote_url: String,
 
+    // ── Multiline Commit Message Editor ─────────────────────────────
+    pub show_commit_modal: bool,
+    pub commit_message_lines: Vec<String>,
+    pub commit_cursor_row: usize,
+    pub commit_cursor_col: usize,
+    pub commit_modal_scroll: usize,
+
+    // ── Push / Pull Confirmations ──────────────────────────────────
+    pub show_confirm_push: bool,
+    pub show_confirm_pull: bool,
+
+    // ── Credentials Handler ────────────────────────────────────────
+    pub session_id: String,
+    pub tx: Option<std::sync::mpsc::Sender<TuiMessage>>,
+    pub show_credentials_modal: bool,
+    pub credentials_prompt: String,
+    pub credentials_input: String,
+    pub credentials_cursor: usize,
+    pub credentials_mask: bool,
+
 
 }
 
@@ -156,6 +182,29 @@ impl AppState {
             init_cursor: 0,
             init_branch_name: String::new(),
             init_remote_url: String::new(),
+            
+            // Multiline Commit Modal
+            show_commit_modal: false,
+            commit_message_lines: vec![String::new()],
+            commit_cursor_row: 0,
+            commit_cursor_col: 0,
+            commit_modal_scroll: 0,
+
+            // Push/Pull Confirmations
+            show_confirm_push: false,
+            show_confirm_pull: false,
+
+            // Credentials Handler
+            session_id: format!("{:.3}", std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs_f64()),
+            tx: None,
+            show_credentials_modal: false,
+            credentials_prompt: String::new(),
+            credentials_input: String::new(),
+            credentials_cursor: 0,
+            credentials_mask: false,
         };
 
         if config.language.is_empty() {
@@ -467,6 +516,40 @@ impl AppState {
         }
     }
 
+    pub fn run_pull(&mut self) {
+        if let Some(ref tx) = self.tx {
+            self.console_running = true;
+            self.console_visible = true;
+            self.console_scroll = 0;
+            self.console_output = format!("$ git pull {} {}\n", self.remote, self.branch);
+            self.status_message = translate(&self.language, "status_pulling");
+            let remote = self.remote.clone();
+            let branch = self.branch.clone();
+            git::run_git_async(
+                vec!["pull".to_string(), remote, branch],
+                self.session_id.clone(),
+                tx.clone(),
+            );
+        }
+    }
+
+    pub fn run_push(&mut self) {
+        if let Some(ref tx) = self.tx {
+            self.console_running = true;
+            self.console_visible = true;
+            self.console_scroll = 0;
+            self.console_output = format!("$ git push {} {}\n", self.remote, self.branch);
+            self.status_message = translate(&self.language, "status_pushing");
+            let remote = self.remote.clone();
+            let branch = self.branch.clone();
+            git::run_git_async(
+                vec!["push".to_string(), remote, branch],
+                self.session_id.clone(),
+                tx.clone(),
+            );
+        }
+    }
+
     // ── Commands ────────────────────────────────────────────────
 
     pub fn execute_command(&mut self, input: &str) {
@@ -519,24 +602,11 @@ impl AppState {
                 self.status_message = translate(&self.language, "status_not_git");
                 return;
             }
-            self.console_running = true;
-            self.console_visible = true;
-            self.console_scroll = 0;
-            self.console_output = format!("$ git pull {} {}\n", self.remote, self.branch);
-            self.status_message = translate(&self.language, "status_pulling");
-            let remote = self.remote.clone();
-            let branch = self.branch.clone();
-            match git::run_git_verbose(&["pull", &remote, &branch]) {
-                Ok(out) => {
-                    self.console_output.push_str(&out);
-                    self.console_output.push_str("\n✓ Pull complete.");
-                }
-                Err(e) => {
-                    self.console_output.push_str(&e);
-                }
+            if self.console_running {
+                self.status_message = "A command is already running.".to_string();
+                return;
             }
-            self.console_running = false;
-            self.refresh_git_status();
+            self.show_confirm_pull = true;
             return;
         }
 
@@ -545,24 +615,24 @@ impl AppState {
                 self.status_message = translate(&self.language, "status_not_git");
                 return;
             }
-            self.console_running = true;
-            self.console_visible = true;
-            self.console_scroll = 0;
-            self.console_output = format!("$ git push {} {}\n", self.remote, self.branch);
-            self.status_message = translate(&self.language, "status_pushing");
-            let remote = self.remote.clone();
-            let branch = self.branch.clone();
-            match git::run_git_verbose(&["push", &remote, &branch]) {
-                Ok(out) => {
-                    self.console_output.push_str(&out);
-                    self.console_output.push_str("\n✓ Push complete.");
-                }
-                Err(e) => {
-                    self.console_output.push_str(&e);
-                }
+            if self.console_running {
+                self.status_message = "A command is already running.".to_string();
+                return;
             }
-            self.console_running = false;
-            self.refresh_git_status();
+            self.show_confirm_push = true;
+            return;
+        }
+
+        if input == "/commit" {
+            if !self.is_git_repo {
+                self.status_message = translate(&self.language, "status_not_git");
+                return;
+            }
+            self.show_commit_modal = true;
+            self.commit_message_lines = vec![String::new()];
+            self.commit_cursor_row = 0;
+            self.commit_cursor_col = 0;
+            self.commit_modal_scroll = 0;
             return;
         }
 

@@ -496,6 +496,14 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_help_modal(f, s);
     } else if s.show_docs_modal {
         super::modals::draw_docs_modal(f, s);
+    } else if s.show_commit_modal {
+        super::modals::draw_commit_modal(f, s);
+    } else if s.show_confirm_push {
+        super::modals::draw_confirm_push_modal(f, s);
+    } else if s.show_confirm_pull {
+        super::modals::draw_confirm_pull_modal(f, s);
+    } else if s.show_credentials_modal {
+        super::modals::draw_credentials_modal(f, s);
     }
 
     // 11. Mini Console (overlay at bottom)
