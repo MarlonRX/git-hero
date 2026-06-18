@@ -406,19 +406,17 @@ impl AppState {
             && self.selected_commit_idx < self.commits.len()
         {
             let hash = &self.commits[self.selected_commit_idx].hash;
-            self.active_diff = match git::run_git(&["show", "--stat", "--patch", hash]) {
+            self.active_diff = match git::run_git(&["show", "--name-status", "--format=", hash]) {
                 Ok(out) => {
-                    let lines: Vec<&str> = out.split('\n').collect();
-                    const MAX_COMMIT_DIFF_LINES: usize = 500;
-                    if lines.len() > MAX_COMMIT_DIFF_LINES {
-                        let mut truncated = lines[..MAX_COMMIT_DIFF_LINES].join("\n");
-                        truncated.push_str(&format!(
-                            "\n... (truncated, {} more lines)",
-                            lines.len() - MAX_COMMIT_DIFF_LINES
-                        ));
-                        truncated
+                    let entries: Vec<String> = out
+                        .lines()
+                        .filter(|l| !l.is_empty())
+                        .map(|l| l.replace('\t', "  "))
+                        .collect();
+                    if entries.is_empty() {
+                        "(no files changed)".to_string()
                     } else {
-                        out
+                        entries.join("\n")
                     }
                 }
                 Err(e) => format!("Error showing commit: {}", e),

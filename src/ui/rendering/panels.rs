@@ -423,15 +423,20 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     ];
     f.render_widget(Paragraph::new(lines).style(Style::default().bg(s.theme.background)), shortcuts_inner);
 
+    let right_constraints: Vec<Constraint> = if s.focus_pane == "commits" {
+        vec![Constraint::Percentage(40), Constraint::Percentage(60)]
+    } else {
+        vec![Constraint::Percentage(80), Constraint::Percentage(20)]
+    };
     let right_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .constraints(right_constraints)
         .split(right);
 
     let diff_area = right_chunks[0];
     let mut diff_title = " DIFF ".to_string();
     if s.focus_pane == "commits" && !s.commits.is_empty() && s.selected_commit_idx < s.commits.len() {
-        diff_title = format!(" COMMIT: {} ", s.commits[s.selected_commit_idx].hash);
+        diff_title = " FILES CHANGED ".to_string();
     } else if !s.files.is_empty() && s.selected_file_idx < s.files.len() {
         let file_label = &s.files[s.selected_file_idx].path;
         diff_title = format!(" {} DIFF: {} {} ", 
