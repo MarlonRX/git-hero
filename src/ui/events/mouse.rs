@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 
 use crate::git;
 use crate::theme::get_themes;
-use crate::ui::state::AppState;
+use crate::ui::state::{AppState, FlatEntryKind};
 
 pub fn mouse_setup(col: u16, row: u16, s: &mut AppState, area: Rect) {
     let mw = 60; let mh = 14;
@@ -98,14 +98,16 @@ pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, inner: Rect) {
             // SHORTCUTS panel → focus diff
             s.focus_pane = "diff".into();
         } else {
-            // FILES panel → select file
+            // FILES panel → select file or toggle directory
             let clicked = row.saturating_sub(info_end_y) as usize;
-            if clicked < s.files.len() {
+            if clicked < s.flat_entries.len() {
                 s.focus_pane = "files".into();
-                s.selected_file_idx = clicked;
+                s.flat_idx = clicked;
                 s.diff_scroll_offset = 0;
+                let FlatEntryKind::File(fi) = s.flat_entries[clicked].kind;
+                s.selected_file_idx = fi;
                 if col >= inner.x + 2 && col <= inner.x + 6 {
-                    s.toggle_stage_file(clicked);
+                    s.toggle_stage_file(fi);
                 } else {
                     s.update_diff_content();
                 }

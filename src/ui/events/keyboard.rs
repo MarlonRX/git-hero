@@ -4,7 +4,7 @@ use crate::config::{save_config, Config};
 use crate::git;
 use crate::i18n::translate;
 use crate::theme::{get_theme_by_name, get_themes};
-use crate::ui::state::AppState;
+use crate::ui::state::{AppState, FlatEntryKind};
 
 pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
     match code {
@@ -261,8 +261,12 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             s.diff_scroll_offset = 0;
         }
         KeyCode::Up | KeyCode::Char('k') => {
-            if s.focus_pane == "files" && !s.files.is_empty() {
-                s.selected_file_idx = (s.selected_file_idx + s.files.len() - 1) % s.files.len();
+            if s.focus_pane == "files" && !s.flat_entries.is_empty() {
+                s.flat_idx = (s.flat_idx + s.flat_entries.len() - 1) % s.flat_entries.len();
+                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
+                    let FlatEntryKind::File(fi) = entry.kind;
+                    s.selected_file_idx = fi;
+                }
                 s.update_diff_content(); s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + s.commits.len() - 1) % s.commits.len();
@@ -274,8 +278,12 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            if s.focus_pane == "files" && !s.files.is_empty() {
-                s.selected_file_idx = (s.selected_file_idx + 1) % s.files.len();
+            if s.focus_pane == "files" && !s.flat_entries.is_empty() {
+                s.flat_idx = (s.flat_idx + 1) % s.flat_entries.len();
+                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
+                    let FlatEntryKind::File(fi) = entry.kind;
+                    s.selected_file_idx = fi;
+                }
                 s.update_diff_content(); s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + 1) % s.commits.len();
@@ -287,8 +295,11 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             }
         }
         KeyCode::Char(' ') => {
-            if s.focus_pane == "files" && !s.files.is_empty() {
-                s.toggle_stage_file(s.selected_file_idx);
+            if s.focus_pane == "files" && !s.flat_entries.is_empty() {
+                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
+                    let FlatEntryKind::File(fi) = entry.kind;
+                    s.toggle_stage_file(fi);
+                }
             }
         }
         KeyCode::Enter => {
@@ -314,8 +325,11 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                         }
                     }
                 }
-            } else if s.focus_pane == "files" && !s.files.is_empty() {
-                s.toggle_stage_file(s.selected_file_idx);
+            } else if s.focus_pane == "files" && !s.flat_entries.is_empty() {
+                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
+                    let FlatEntryKind::File(fi) = entry.kind;
+                    s.toggle_stage_file(fi);
+                }
             }
         }
         // ── Extended shortcuts ──────────────────────────────────
@@ -481,11 +495,20 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
     let code = key.code;
     let mods = key.modifiers;
     
-    // Confirm commit: Ctrl+Enter, Ctrl+S, or Ctrl+D
-    if (code == KeyCode::Enter && mods.contains(KeyModifiers::CONTROL))
-        || (code == KeyCode::Char('s') && mods.contains(KeyModifiers::CONTROL))
-        || (code == KeyCode::Char('d') && mods.contains(KeyModifiers::CONTROL))
-    {
+    // Shift+Enter: new line
+    if code == KeyCode::Enter && mods.contains(KeyModifiers::SHIFT) {
+        let current_line = &s.commit_message_lines[s.commit_cursor_row];
+        let col = s.commit_cursor_col.min(current_line.len());
+        let (before, after) = (current_line[..col].to_string(), current_line[col..].to_string());
+        s.commit_message_lines[s.commit_cursor_row] = before;
+        s.commit_message_lines.insert(s.commit_cursor_row + 1, after);
+        s.commit_cursor_row += 1;
+        s.commit_cursor_col = 0;
+        return;
+    }
+    
+    // Confirm commit: Y or Enter
+    if code == KeyCode::Char('y') || code == KeyCode::Char('Y') || code == KeyCode::Enter {
         let msg = s.commit_message_lines.join("\n");
         let msg = msg.trim();
         if msg.is_empty() {
@@ -512,17 +535,6 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
     match code {
         KeyCode::Esc => {
             s.show_commit_modal = false;
-        }
-        KeyCode::Enter => {
-            let current_line = &s.commit_message_lines[s.commit_cursor_row];
-            let (before, after) = current_line.split_at(s.commit_cursor_col);
-            let before_str = before.to_string();
-            let after_str = after.to_string();
-            
-            s.commit_message_lines[s.commit_cursor_row] = before_str;
-            s.commit_message_lines.insert(s.commit_cursor_row + 1, after_str);
-            s.commit_cursor_row += 1;
-            s.commit_cursor_col = 0;
         }
         KeyCode::Backspace => {
             if s.commit_cursor_col > 0 {

@@ -22,6 +22,16 @@ pub struct GitFile {
 }
 
 #[derive(Clone)]
+pub enum FlatEntryKind {
+    File(usize),
+}
+
+#[derive(Clone)]
+pub struct FlatEntry {
+    pub kind: FlatEntryKind,
+}
+
+#[derive(Clone)]
 pub struct GitCommit {
     pub hash: String,
     pub date: String,
@@ -48,6 +58,8 @@ pub struct AppState {
     // ── Interactive Lists ──────────────────────────────────────────
     pub files: Vec<GitFile>,
     pub selected_file_idx: usize,
+    pub flat_entries: Vec<FlatEntry>,
+    pub flat_idx: usize,
     pub commits: Vec<GitCommit>,
     pub selected_commit_idx: usize,
     pub focus_pane: String,
@@ -145,6 +157,8 @@ impl AppState {
             fetching: false,
             files: Vec::new(),
             selected_file_idx: 0,
+            flat_entries: Vec::new(),
+            flat_idx: 0,
             commits: Vec::new(),
             selected_commit_idx: 0,
             focus_pane: "files".to_string(),
@@ -223,6 +237,7 @@ impl AppState {
             self.ahead = git::get_commits_ahead(&self.remote, &self.branch);
 
             self.files = self.get_changed_files();
+            self.rebuild_file_tree();
             self.commits = self.get_recent_commits();
 
             if !self.files.is_empty() && self.selected_file_idx >= self.files.len() {
@@ -316,6 +331,35 @@ impl AppState {
             }
         }
         files
+    }
+
+    pub fn rebuild_file_tree(&mut self) {
+        self.flat_entries.clear();
+
+        if self.files.is_empty() {
+            self.flat_idx = 0;
+            return;
+        }
+
+        let mut indices: Vec<usize> = (0..self.files.len()).collect();
+        indices.sort_by(|&a, &b| self.files[a].path.cmp(&self.files[b].path));
+
+        for fi in indices {
+            self.flat_entries.push(FlatEntry {
+                kind: FlatEntryKind::File(fi),
+            });
+        }
+
+        if self.flat_idx >= self.flat_entries.len() {
+            self.flat_idx = self.flat_entries.len().saturating_sub(1);
+        }
+
+        if let Some(entry) = self.flat_entries.get(self.flat_idx) {
+            let FlatEntryKind::File(fi) = entry.kind;
+            if fi < self.files.len() {
+                self.selected_file_idx = fi;
+            }
+        }
     }
 
     fn get_recent_commits(&self) -> Vec<GitCommit> {

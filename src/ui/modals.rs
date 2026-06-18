@@ -596,7 +596,7 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
         }
     }
 
-    let help = "Enter: New line | Ctrl+Enter or Ctrl+S: Confirm | Esc: Cancel";
+    let help = "Shift+Enter: New line | Y / Enter: Confirm | Esc: Cancel";
     f.render_widget(
         Paragraph::new(help).alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),

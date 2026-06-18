@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::state::{AppState, GitCommit};
+use crate::ui::state::{AppState, FlatEntryKind, GitCommit};
 use super::components::{draw_solid_border, draw_solid_hline, draw_continuous_border, soften, short_path};
 
 pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
@@ -343,7 +343,11 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             format!(" [{}] ", indicators.join(" "))
         };
         
-        let items: Vec<ListItem> = s.files.iter().enumerate().map(|(i, f)| {
+        let items: Vec<ListItem> = s.flat_entries.iter().enumerate().map(|(i, entry)| {
+            let pre = if i == s.flat_idx && s.focus_pane == "files" { "\u{25B6} " } else { "  " };
+            let FlatEntryKind::File(fi) = entry.kind;
+
+            let f = &s.files[fi];
             let fg = if f.staged { s.theme.success } else if f.status == "??" { s.theme.dimmed } else { s.theme.warning };
             let cb = if f.staged { "[\u{2713}]" } else { "[ ]" };
             
@@ -355,9 +359,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
                 _ => (s.get_icon_str("mod"), fg),
             };
             
-            let pre = if i == s.selected_file_idx && s.focus_pane == "files" { "\u{25B6} " } else { "  " };
-
-            let style = if i == s.selected_file_idx && s.focus_pane == "files" {
+            let style = if i == s.flat_idx && s.focus_pane == "files" {
                 Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(fg).bg(s.theme.background)
@@ -431,10 +433,11 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     if s.focus_pane == "commits" && !s.commits.is_empty() && s.selected_commit_idx < s.commits.len() {
         diff_title = format!(" COMMIT: {} ", s.commits[s.selected_commit_idx].hash);
     } else if !s.files.is_empty() && s.selected_file_idx < s.files.len() {
+        let file_label = &s.files[s.selected_file_idx].path;
         diff_title = format!(" {} DIFF: {} {} ", 
-            if s.focus_pane == "diff" { "▼" } else { "" },
-            s.files[s.selected_file_idx].path,
-            if s.focus_pane == "diff" { "▼" } else { "" },
+            if s.focus_pane == "diff" { "\u{25BC}" } else { "" },
+            file_label,
+            if s.focus_pane == "diff" { "\u{25BC}" } else { "" },
         );
     }
     let diff_title_style = if s.focus_pane == "diff" {
