@@ -45,21 +45,35 @@ Inspirada en herramientas como `lazygit` o `gitui`, pero enfocada en ser **simpl
 
 ### Quick Install (recommended)
 
-**Linux & macOS:**
+**Linux / macOS / WSL:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/MarlonRX/git-hero/main/scripts/install.sh | bash
 ```
 
-**Homebrew (macOS):**
+**Homebrew (macOS / Linux):**
 ```bash
 brew tap MarlonRX/git-hero
 brew install git-hero
 ```
 
-**Cargo (any platform):**
+**Cargo (any platform, including Windows):**
 ```bash
 cargo install git-hero
 ```
+
+**Windows (Scoop):**
+```powershell
+scoop bucket add MarlonRX https://github.com/MarlonRX/git-hero
+scoop install git-hero
+```
+
+**Windows (manual):**
+1. Install Rust from [rustup.rs](https://rustup.rs/)
+2. Open a terminal (PowerShell / cmd / Git Bash)
+3. Run:
+   ```powershell
+   cargo install git-hero
+   ```
 
 ### Build from Source
 
@@ -396,104 +410,4 @@ Cambia de tema con la tecla `t`.
 ## 📝 Licencia
 
 MIT
-
-
-  echo ""
-
-  if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    echo "${red}  ✖  No estas dentro de un repositorio git.${nc}"
-    return 1
-  fi
-
-  local branch=$(git symbolic-ref --short HEAD 2>/dev/null)
-  local remote=$(git config branch.$branch.remote 2>/dev/null || echo "origin")
-
-  echo "${sep}"
-  echo "${bold}  GIT FLOW  ${nc}${cyan}${branch}${nc} ${blue}→${nc} ${cyan}${remote}${nc}"
-  echo "${sep}"
-
-  echo ""
-  echo "${blue}  🔍 Verificando remoto...${nc}"
-  git fetch $remote $branch 2>/dev/null
-
-  local behind=$(git rev-list --count HEAD..$remote/$branch 2>/dev/null)
-  local ahead=$(git rev-list --count $remote/$branch..HEAD 2>/dev/null)
-
-  echo "${cyan}  ┌─ Remoto: ${remote}/${branch}${nc}"
-  echo "${cyan}  ├─ Adelante: ${green}${ahead}${nc} commit(s) (por enviar)"
-  echo "${cyan}  └─ Detras:   ${yellow}${behind}${nc} commit(s) (por recibir)"
-
-  local did_commit=false
-  local has_unpushed=false
-  [ "$ahead" -gt 0 ] 2>/dev/null && has_unpushed=true
-
-  # ── ADD + COMMIT (solo si hay cambios sin commitear) ──
-  if [ -n "$(git status --porcelain)" ]; then
-    echo ""
-    echo "${blue}  📦 git add .${nc}"
-    git add . || { echo "${red}  ✖  Error en git add.${nc}"; return 1; }
-
-    if git diff --cached --quiet 2>/dev/null; then
-      echo "${cyan}  ℹ  Sin cambios para commit (posibles ignorados por .gitignore).${nc}"
-    else
-      echo ""
-      echo "${bold}  💬 Mensaje del commit:${nc}"
-      echo -n "  ${blue}→${nc} "
-      read commit_msg
-      [ -z "$commit_msg" ] && { echo ""; echo "${red}  ✖  Mensaje vacio, cancelado.${nc}"; return 1; }
-
-      echo ""
-      echo "${blue}  📝 git commit -m \"${commit_msg}\"${nc}"
-      git commit -m "$commit_msg" || { echo "${red}  ✖  Error al hacer commit.${nc}"; return 1; }
-      echo "${green}  ✔  Commit creado${nc}"
-      did_commit=true
-      ahead=$(git rev-list --count $remote/$branch..HEAD 2>/dev/null)
-      [ "$ahead" -gt 0 ] 2>/dev/null && has_unpushed=true
-    fi
-  else
-    echo ""
-    echo "${cyan}  ℹ  Sin cambios pendientes para commit.${nc}"
-  fi
-
-  # ── PULL ──
-  if [ "$behind" -gt 0 ] 2>/dev/null; then
-    echo ""
-    echo "${yellow}  ⚠  El remoto tiene ${behind} commit(s) que no tienes.${nc}"
-    echo -n "${bold}  ⬇  ¿Hacer pull? (s/N): ${nc}"
-    read do_pull
-    if [[ "$do_pull" =~ ^[sS]$ ]]; then
-      echo ""
-      echo "${blue}  ⬇  git pull ${remote} ${branch}${nc}"
-      git pull $remote $branch || { echo "${red}  ✖  Error en pull.${nc}"; return 1; }
-      echo "${green}  ✔  Pull completado${nc}"
-      ahead=$(git rev-list --count $remote/$branch..HEAD 2>/dev/null)
-      [ "$ahead" -gt 0 ] 2>/dev/null && has_unpushed=true
-    fi
-  elif ! $did_commit && ! $has_unpushed; then
-    echo ""
-    echo "${green}  ✔  Estas al dia con el remoto${nc}"
-  fi
-
-  # ── PUSH ──
-  if $has_unpushed; then
-    echo ""
-    echo -n "${bold}  🚀 ¿Hacer push? (s/N): ${nc}"
-    read do_push
-    if [[ "$do_push" =~ ^[sS]$ ]]; then
-      echo ""
-      echo "${blue}  ⬆  git push ${remote} ${branch}${nc}"
-      git push $remote $branch || { echo "${red}  ✖  Error en push.${nc}"; return 1; }
-      echo "${green}  ✔  Push completado${nc}"
-    else
-      echo "${cyan}  📌 Commits locales guardados, sin push.${nc}"
-    fi
-  fi
-
-  echo ""
-  echo "${sep}"
-  echo "${green}${bold}  ✅  ¡Listo!${nc}"
-  echo "${sep}"
-  echo ""
-}
-```
 
