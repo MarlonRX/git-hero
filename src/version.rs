@@ -44,6 +44,27 @@ pub fn is_release() -> bool {
     BUILD_PROFILE == "release" && GIT_DIRTY == "0"
 }
 
+/// Semantic version tuple for ordering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Version {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+}
+
+impl Version {
+    /// Parse `"v0.1.0"` or `"0.1.0"`. Returns `None` for invalid input.
+    pub fn parse(s: &str) -> Option<Self> {
+        let s = s.strip_prefix('v').unwrap_or(s);
+        let mut parts = s.splitn(3, '.');
+        Some(Self {
+            major: parts.next()?.parse().ok()?,
+            minor: parts.next()?.parse().ok()?,
+            patch: parts.next()?.parse().ok()?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,5 +77,32 @@ mod tests {
     #[test]
     fn full_contains_hash() {
         assert!(full().contains(GIT_HASH));
+    }
+
+    #[test]
+    fn version_parse_v_prefix() {
+        let v = Version::parse("v0.1.0").unwrap();
+        assert_eq!(v, Version { major: 0, minor: 1, patch: 0 });
+    }
+
+    #[test]
+    fn version_parse_no_prefix() {
+        let v = Version::parse("1.2.3").unwrap();
+        assert_eq!(v, Version { major: 1, minor: 2, patch: 3 });
+    }
+
+    #[test]
+    fn version_parse_invalid() {
+        assert!(Version::parse("foo").is_none());
+        assert!(Version::parse("1.2").is_none());
+        assert!(Version::parse("").is_none());
+    }
+
+    #[test]
+    fn version_ordering() {
+        let v1 = Version { major: 0, minor: 9, patch: 0 };
+        let v2 = Version { major: 0, minor: 10, patch: 0 };
+        assert!(v1 < v2);
+        assert!(v2 > v1);
     }
 }

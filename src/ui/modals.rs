@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::i18n::translate;
+use crate::i18n::{translate, trf};
 use crate::theme::get_themes;
 use crate::ui::state::AppState;
 
@@ -496,6 +496,62 @@ pub fn draw_credentials_modal(f: &mut Frame, s: &mut AppState) {
     f.render_widget(
         Paragraph::new(help).alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}
+
+// ── Update Available Modal ────────────────────────────────────────
+
+/// Modal shown when a newer version of Git Hero is found on startup.
+/// Three choices: open download page, remind later, or skip this version.
+pub fn draw_update_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 58u16;
+    let mh = 12u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
+    draw_modal_title(
+        f,
+        modal,
+        &format!(" {} ", translate(&s.language, "update_title")),
+        s.theme.surface,
+        s.theme.accent,
+    );
+
+    let text = format!(
+        "{}\n{}\n",
+        trf(&s.language, "update_new_version", &[&s.latest_version]),
+        trf(&s.language, "update_current_version", &[crate::version::PKG_VERSION]),
+    );
+    f.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
+        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: 3 },
+    );
+
+    // Three options
+    let opts = [
+        format!(" [1] {} ", translate(&s.language, "update_yes")),
+        format!(" [2] {} ", translate(&s.language, "update_no")),
+        format!(" [3] {} ", translate(&s.language, "update_skip")),
+    ];
+    let opts_text = opts.join("\n");
+    f.render_widget(
+        Paragraph::new(opts_text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
+        Rect { x: inner.x + 1, y: inner.y + 4, width: inner.width - 2, height: 4 },
+    );
+
+    let help = "Press [1] Open download page  |  [2] Later  |  [3] Don't show again";
+    f.render_widget(
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.surface)),
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
     );
 }

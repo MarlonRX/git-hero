@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::config::{save_config, Config};
+use crate::config::{load_config, save_config, Config};
 use crate::git;
 use crate::i18n::translate;
 use crate::theme::{get_theme_by_name, get_themes};
@@ -45,6 +45,7 @@ pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
                     language: s.language.clone(),
                     nerd_font: s.nerd_font,
                     theme: s.theme.name.to_string(),
+                    skipped_version: None,
                 });
                 s.refresh_git_status();
                 s.status_message = translate(&s.language, "welcome_message").into_owned();
@@ -74,10 +75,14 @@ pub fn handle_theme_modal_key(code: KeyCode, s: &mut AppState) {
         }
         KeyCode::Enter => {
             s.show_theme_modal = false;
+            let existing_skipped = crate::config::load_config()
+                .ok()
+                .and_then(|c| c.skipped_version);
             let _ = save_config(&Config {
                 language: s.language.clone(),
                 nerd_font: s.nerd_font,
                 theme: s.theme.name.to_string(),
+                skipped_version: existing_skipped,
             });
             s.status_message = format!("Theme changed to: {}", s.theme.name);
         }
@@ -442,6 +447,48 @@ pub fn handle_confirm_remove_key(code: KeyCode, s: &mut AppState) {
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             s.show_confirm_remove = false;
             s.status_message = "Repository removal cancelled.".to_string();
+        }
+        _ => {}
+    }
+}
+
+/// Keyboard handler for the update-available modal. Three choices:
+/// - 1 / y / Enter → open the releases page in the browser
+/// - 2 / n → dismiss (remind later)
+/// - 3 / s / Esc → skip this version permanently
+pub fn handle_update_modal_key(code: KeyCode, s: &mut AppState) {
+    match code {
+        KeyCode::Char('1') | KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            s.show_update_modal = false;
+            // Open the GitHub releases page in the default browser.
+            let url = "https://github.com/MarlonRX/git-hero/releases/latest";
+            #[cfg(target_os = "macos")]
+            let _ = std::process::Command::new("open").arg(url).spawn();
+            #[cfg(target_os = "linux")]
+            let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+            let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+            s.status_message = format!("Opening {} ...", url);
+        }
+        KeyCode::Char('2') | KeyCode::Char('n') | KeyCode::Char('N') => {
+            s.show_update_modal = false;
+            s.status_message = "Update dismissed. You can check later.".to_string();
+        }
+        KeyCode::Char('3') | KeyCode::Char('s') | KeyCode::Char('S') | KeyCode::Esc => {
+            s.show_update_modal = false;
+            // Save the skipped version so we don't prompt again.
+            let mut cfg = load_config().unwrap_or(Config {
+                language: s.language.clone(),
+                nerd_font: s.nerd_font,
+                theme: s.theme.name.to_string(),
+                skipped_version: None,
+            });
+            cfg.skipped_version = Some(s.latest_version.clone());
+            let _ = save_config(&cfg);
+            s.status_message = format!(
+                "Update v{} will not be shown again.",
+                s.latest_version
+            );
         }
         _ => {}
     }

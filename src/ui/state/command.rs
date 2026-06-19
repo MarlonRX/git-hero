@@ -66,6 +66,8 @@ pub enum Command {
     Stash,
     /// `/stash-pop` — pop the stash
     StashPop,
+    /// `/language <en|es>` — switch the UI language
+    SetLanguage(String),
     /// `/quit` or `/exit` — leave the TUI
     Quit,
     /// Anything starting with `/` we don't recognise. The original input
@@ -199,6 +201,18 @@ impl Command {
             });
         }
 
+        // ── /language <en|es> ────────────────────────────────────
+        if let Some(rest) = input.strip_prefix("/language ") {
+            let lang = rest.trim().to_lowercase();
+            if lang == "en" || lang == "es" {
+                return Ok(Command::SetLanguage(lang));
+            }
+            return Err(ParseError {
+                input: input.to_string(),
+                reason: Cow::Borrowed("/language must be 'en' or 'es'"),
+            });
+        }
+
         // ── Exact-match commands ─────────────────────────────────
         match input {
             "/cd" => return Err(ParseError {
@@ -228,6 +242,10 @@ impl Command {
             "/switch" => return Err(ParseError {
                 input: input.to_string(),
                 reason: Cow::Borrowed("/switch requires a name"),
+            }),
+            "/language" => return Err(ParseError {
+                input: input.to_string(),
+                reason: Cow::Borrowed("/language requires 'en' or 'es'"),
             }),
             "/config" => return Ok(Command::ListConfig),
             "/config-global" => return Err(ParseError {
@@ -265,6 +283,7 @@ impl Command {
         ("/stash", "git stash"),
         ("/stash-pop", "git stash pop"),
         ("/themes", "Open the theme picker"),
+        ("/language <en|es>", "Switch the UI language"),
         ("/help", "Quick help"),
         ("/docs", "Detailed reference"),
         ("/quit", "Leave the TUI"),

@@ -5,9 +5,17 @@ All notable changes to Git Hero are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Major internal refactor
+## [0.2.0] — 2025-06-19
 
 ### Added
+
+- **Startup version check**: on launch, `git-hero` checks GitHub tags for a
+  newer release. If found, a modal offers "Open download page", "Remind later",
+  or "Don't show again for this version". The skip choice persists in config
+  (`skipped_version`). ([#1])
+
+- **`/language <en|es>` command**: switch the UI language at runtime. Persists
+  to config and takes effect immediately — no restart needed. ([#2])
 
 - **`Command` enum + `parse()` function**: replaces the 300-line if-else chain
   in `execute_command` with a typed dispatch table. 25 variants, 38 unit tests.
@@ -143,8 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | `log.rs` | 2 |
 | `version.rs` | 2 |
 | `cli.rs` | 1 |
-| **Total** | **~86** |
+| **Total** | **~85** |
 
 ### Dependencies
 
 - **Added**: `phf 0.11` (compile-time maps), `thiserror 1.0` (error derive)
+
+[0.2.0]: https://github.com/MarlonRX/git-hero/releases/tag/v0.2.0

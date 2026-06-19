@@ -8,6 +8,7 @@
 //! `run_pull` / `run_push` are called from the push/pull confirmation
 //! modals (the user has *already* confirmed, so they bypass the dispatcher).
 
+use crate::config::{load_config, save_config, Config};
 use crate::git;
 use crate::i18n::{translate, trf};
 use crate::theme::get_themes;
@@ -97,6 +98,7 @@ impl AppState {
             }
             Command::Stash => self.cmd_stash(),
             Command::StashPop => self.cmd_stash_pop(),
+            Command::SetLanguage(lang) => self.cmd_set_language(&lang),
             Command::Quit => {
                 // No direct way to break the main loop from here; the
                 // user can press `q`. `/quit` is a no-op for now.
@@ -488,6 +490,26 @@ impl AppState {
                 self.status_message = trf(&self.language, "status_err_stash_pop", &[&e])
             }
         }
+    }
+
+    // ── /language <en|es> ────────────────────────────────────────
+
+    fn cmd_set_language(&mut self, lang: &str) {
+        let current = self.language.as_str();
+        if current == lang {
+            self.status_message = trf(&self.language, "status_language_same", &[lang]);
+            return;
+        }
+        self.language = lang.to_string();
+        // Preserve the skipped_version when saving.
+        let existing_skipped = load_config().ok().and_then(|c| c.skipped_version);
+        let _ = save_config(&Config {
+            language: self.language.clone(),
+            nerd_font: self.nerd_font,
+            theme: self.theme.name.to_string(),
+            skipped_version: existing_skipped,
+        });
+        self.status_message = trf(lang, "status_language_changed", &[lang]);
     }
 
     // ── Helpers ──────────────────────────────────────────────────

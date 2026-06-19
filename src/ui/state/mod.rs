@@ -38,6 +38,11 @@ enum DiffKey {
 pub enum TuiMessage {
     ConsoleOutput(String),
     CommandFinished(Result<(), String>),
+    /// Version-check result: latest version string.
+    /// Reserved for future async check — currently the sync check in
+    /// `AppState::new()` sets `show_update_modal` directly.
+    #[allow(dead_code)]
+    UpdateAvailable(String),
 }
 
 #[derive(Clone)]
@@ -154,6 +159,12 @@ pub struct AppState {
     /// see `docs.rs`: "/remove-repo         Delete .git directory (no confirm!)".
     pub show_confirm_remove: bool,
 
+    // ── Update notification ────────────────────────────────────────
+    /// Set to `true` when `check_for_updates` finds a newer version.
+    pub show_update_modal: bool,
+    /// The latest version string (e.g. "0.2.0") to display in the modal.
+    pub latest_version: String,
+
     // ── Credentials Handler ────────────────────────────────────────
     pub session_id: String,
     pub tx: Option<std::sync::mpsc::Sender<TuiMessage>>,
@@ -170,6 +181,7 @@ impl AppState {
             language: "en".to_string(),
             nerd_font: false,
             theme: "Tokyo Night".to_string(),
+            skipped_version: None,
         });
 
         let theme = get_theme_by_name(&config.theme);
@@ -241,6 +253,10 @@ impl AppState {
             show_confirm_push: false,
             show_confirm_pull: false,
             show_confirm_remove: false,
+
+            // Update notification
+            show_update_modal: false,
+            latest_version: String::new(),
 
             // Credentials Handler
             session_id: format!("{:.3}", std::time::SystemTime::now()
@@ -545,6 +561,39 @@ impl AppState {
         icons::lookup(self.nerd_font, key)
     }
 
+    /// Check whether a newer version of Git Hero is available on GitHub.
+    /// If one exists (and the user hasn't skipped it), sets
+    /// `show_update_modal` so the TUI can display the prompt on the next
+    /// frame. Silently ignores network/git errors — the update check is
+    /// a nice-to-have, not a requirement.
+    pub fn check_for_updates(&mut self) {
+        let current = crate::version::PKG_VERSION;
+        // Skip if current version is not a release semver (e.g., debug builds).
+        let current_ver = crate::version::Version::parse(current);
+        if current_ver.is_none() {
+            return;
+        }
+
+        match crate::git::check_latest_version() {
+            Ok(version) => {
+                if version == current {
+                    return;
+                }
+                // Check if the user already chose to skip this version.
+                if let Ok(cfg) = crate::config::load_config()
+                    && cfg.skipped_version.as_deref() == Some(&version)
+                {
+                    return;
+                }
+                self.show_update_modal = true;
+                self.latest_version = version;
+            }
+            Err(e) => {
+                log::log_debug(&format!("Update check failed: {e}"));
+            }
+        }
+    }
+
     /// Returns `true` if any modal is currently on top of the dashboard.
     /// Modals are mutually exclusive (only one shown at a time), but the
     /// renderer still asks "is *any* modal up?" to decide whether to
@@ -558,6 +607,7 @@ impl AppState {
             || self.show_confirm_pull
             || self.show_confirm_remove
             || self.show_credentials_modal
+            || self.show_update_modal
     }
 }
 

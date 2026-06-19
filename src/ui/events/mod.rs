@@ -38,6 +38,12 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
+    // ── Update Available Modal ───────────────────────────────────
+    if s.show_update_modal {
+        handle_update_modal_key(code, s);
+        return true;
+    }
+
     // ── Confirm Remove Modal ──────────────────────────────────────
     if s.show_confirm_remove {
         handle_confirm_remove_key(code, s);

@@ -344,6 +344,8 @@ fn draw_active_modal(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_confirm_remove_modal(f, s);
     } else if s.show_credentials_modal {
         super::modals::draw_credentials_modal(f, s);
+    } else if s.show_update_modal {
+        super::modals::draw_update_modal(f, s);
     }
 }
 

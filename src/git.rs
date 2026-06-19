@@ -641,6 +641,43 @@ fn parse_log_nul(text: &str) -> Vec<LogEntry> {
         .collect()
 }
 
+// ── Version check ─────────────────────────────────────────────────
+
+/// Check the latest published version by inspecting remote tags.
+/// Uses `git ls-remote --tags` to fetch the tag list, then parses the
+/// most recent semver tag (e.g. `v0.2.0`).
+pub fn check_latest_version() -> Result<String, crate::git_error::GitError> {
+    let output = run_git(&[
+        "ls-remote",
+        "--tags",
+        "https://github.com/MarlonRX/git-hero",
+    ])?;
+
+    let latest = output
+        .lines()
+        .filter_map(|line| {
+            let tag = line.split("refs/tags/").nth(1)?.trim();
+            let version = tag.strip_prefix('v').unwrap_or(tag);
+            // Must be valid semver (x.y.z) with all digits.
+            if version.split('.').count() == 3
+                && version.chars().all(|c| c == '.' || c.is_ascii_digit())
+            {
+                Some(version.to_string())
+            } else {
+                None
+            }
+        })
+        .max_by(|a, b| {
+            let va = crate::version::Version::parse(a).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
+            let vb = crate::version::Version::parse(b).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
+            va.cmp(&vb)
+        });
+
+    latest.ok_or_else(|| {
+        crate::git_error::GitError::Other("no version tags found".into())
+    })
+}
+
 // ── Tests ──────────────────────────────────────────────────────────
 
 #[cfg(test)]

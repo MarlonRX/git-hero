@@ -55,6 +55,7 @@ const COMMANDS: &[&str] = &[
     "/config-global ",
     "/stash",
     "/stash-pop",
+    "/language ",
     "/cd ",
     "/themes",
     "/help",

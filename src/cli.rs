@@ -32,6 +32,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
         language: "en".to_string(),
         nerd_font: false,
         theme: "Tokyo Night".to_string(),
+        skipped_version: None,
     });
     let lang = &config.language;
 

@@ -43,6 +43,11 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
 
     if debug { crate::log::log_debug("TUI: Creating AppState"); }
     let mut state = AppState::new();
+    // Check for updates before entering the event loop. This is a
+    // synchronous git ls-remote call that takes ~300-800ms on a good
+    // network; if it fails (no network, no tags), it's silently ignored.
+    if debug { crate::log::log_debug("TUI: Checking for updates"); }
+    state.check_for_updates();
     let (tx, rx) = std::sync::mpsc::channel::<state::TuiMessage>();
     state.tx = Some(tx);
     
@@ -76,6 +81,14 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
                     let ch = (terminal.size()?.height * 35 / 100).clamp(6, 20);
                     let visible_h = ch.saturating_sub(2) as usize;
                     state.console_scroll = all_lines.len().saturating_sub(visible_h);
+                }
+                state::TuiMessage::UpdateAvailable(_version) => {
+                    // Version check completed. Since we already called
+                    // `check_for_updates()` synchronously at startup,
+                    // this branch handles the corner case where the
+                    // check was started by a background thread.
+                    // Currently unused; the sync check in AppState::new
+                    // already sets show_update_modal.
                 }
                 state::TuiMessage::CommandFinished(res) => {
                     state.console_running = false;

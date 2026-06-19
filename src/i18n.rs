@@ -98,6 +98,16 @@ fn en_dict() -> &'static Dict {
         m.insert("local_commits_kept", "Local commits kept, no push");
         m.insert("up_to_date_with_remote", "You are up to date with remote");
         m.insert("fetch_complete", "✓ Fetch complete.");
+        // ── Update modal keys ──────────────────────────────────
+        m.insert("update_title", "🚀 Update Available");
+        m.insert("update_new_version", "A new version of Git Hero is available: v{}");
+        m.insert("update_current_version", "Current version: v{}");
+        m.insert("update_yes", "Open download page");
+        m.insert("update_no", "Remind me later");
+        m.insert("update_skip", "Don't show again for this version");
+        // ── /language command keys ──────────────────────────────
+        m.insert("status_language_changed", "Language changed to: {}");
+        m.insert("status_language_same", "Language is already {}");
         m
     })
 }
@@ -185,6 +195,16 @@ fn es_dict() -> &'static Dict {
         m.insert("local_commits_kept", "Commits locales guardados, sin push");
         m.insert("up_to_date_with_remote", "Estás al día con el remoto");
         m.insert("fetch_complete", "✓ Fetch completo.");
+        // ── Update modal keys (ES) ─────────────────────────────
+        m.insert("update_title", "🚀 Actualización Disponible");
+        m.insert("update_new_version", "Una nueva versión de Git Hero está disponible: v{}");
+        m.insert("update_current_version", "Versión actual: v{}");
+        m.insert("update_yes", "Abrir página de descarga");
+        m.insert("update_no", "Recordarme después");
+        m.insert("update_skip", "No volver a mostrar esta versión");
+        // ── /language command keys (ES) ────────────────────────
+        m.insert("status_language_changed", "Idioma cambiado a: {}");
+        m.insert("status_language_same", "El idioma ya es {}");
         m
     })
 }
