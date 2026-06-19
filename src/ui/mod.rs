@@ -28,25 +28,25 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 
 /// Launch the TUI application
 pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
-    if debug { crate::log_debug("TUI: Enabling raw mode"); }
+    if debug { crate::log::log_debug("TUI: Enabling raw mode"); }
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    if debug { crate::log_debug("TUI: Entering alternate screen"); }
+    if debug { crate::log::log_debug("TUI: Entering alternate screen"); }
     execute!(
         stdout,
         EnterAlternateScreen,
         crossterm::event::EnableMouseCapture
     )?;
     let backend = CrosstermBackend::new(stdout);
-    if debug { crate::log_debug("TUI: Creating terminal"); }
+    if debug { crate::log::log_debug("TUI: Creating terminal"); }
     let mut terminal = Terminal::new(backend)?;
 
-    if debug { crate::log_debug("TUI: Creating AppState"); }
+    if debug { crate::log::log_debug("TUI: Creating AppState"); }
     let mut state = AppState::new();
     let (tx, rx) = std::sync::mpsc::channel::<state::TuiMessage>();
     state.tx = Some(tx);
     
-    if debug { crate::log_debug(&format!("TUI: AppState created, is_git_repo={}, files={}, commits={}", state.is_git_repo, state.files.len(), state.commits.len())); }
+    if debug { crate::log::log_debug(&format!("TUI: AppState created, is_git_repo={}, files={}, commits={}", state.is_git_repo, state.files.len(), state.commits.len())); }
 
     let mut frame_count: u64 = 0;
     let mut last_check = Instant::now();
@@ -54,11 +54,11 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         frame_count += 1;
 
-        if debug && frame_count == 1 { crate::log_debug("TUI: First draw starting"); }
+        if debug && frame_count == 1 { crate::log::log_debug("TUI: First draw starting"); }
         terminal.draw(|f| {
             draw_ui(f, &mut state);
         })?;
-        if debug && frame_count == 1 { crate::log_debug("TUI: First draw completed"); }
+        if debug && frame_count == 1 { crate::log::log_debug("TUI: First draw completed"); }
 
         // Periodic git change detection (every 2 seconds) - only if not running a command
         if !state.console_running && last_check.elapsed() >= Duration::from_secs(2) {
@@ -73,7 +73,7 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
                     state.console_output.push_str(&out);
                     // Scroll console to end
                     let all_lines: Vec<&str> = state.console_output.split('\n').collect();
-                    let ch = (terminal.size()?.height * 35 / 100).min(20).max(6);
+                    let ch = (terminal.size()?.height * 35 / 100).clamp(6, 20);
                     let visible_h = ch.saturating_sub(2) as usize;
                     state.console_scroll = all_lines.len().saturating_sub(visible_h);
                 }
@@ -94,16 +94,16 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
 
         // Poll for askpass prompt from helper process
         let prompt_path = std::env::temp_dir().join(format!("git-hero-askpass-prompt-{}.txt", state.session_id));
-        if prompt_path.exists() {
-            if let Ok(prompt) = std::fs::read_to_string(&prompt_path) {
-                let _ = std::fs::remove_file(&prompt_path);
-                state.show_credentials_modal = true;
-                state.credentials_prompt = prompt;
-                state.credentials_input.clear();
-                state.credentials_cursor = 0;
-                let lower = state.credentials_prompt.to_lowercase();
-                state.credentials_mask = lower.contains("password") || lower.contains("passphrase") || lower.contains("token") || lower.contains("clave");
-            }
+        if prompt_path.exists()
+            && let Ok(prompt) = std::fs::read_to_string(&prompt_path)
+        {
+            let _ = std::fs::remove_file(&prompt_path);
+            state.show_credentials_modal = true;
+            state.credentials_prompt = prompt;
+            state.credentials_input.clear();
+            state.credentials_cursor = 0;
+            let lower = state.credentials_prompt.to_lowercase();
+            state.credentials_mask = lower.contains("password") || lower.contains("passphrase") || lower.contains("token") || lower.contains("clave");
         }
 
         if event::poll(Duration::from_millis(100))? {

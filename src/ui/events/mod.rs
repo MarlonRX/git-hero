@@ -38,6 +38,12 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
+    // ── Confirm Remove Modal ──────────────────────────────────────
+    if s.show_confirm_remove {
+        handle_confirm_remove_key(code, s);
+        return true;
+    }
+
     // ── Setup Wizard ─────────────────────────────────────────────
     if s.setup_step > 0 {
         handle_setup_key(code, s);
@@ -143,6 +149,8 @@ pub fn handle_mouse_click(
     if s.init_wizard_active { mouse_init_wizard(col, row, s, inner); return; }
     // No repo panel
     if !s.is_git_repo { mouse_no_repo(col, row, s, inner); return; }
+    // Confirm-remove modal: any click outside the modal dismisses it.
+    if s.show_confirm_remove { s.show_confirm_remove = false; return; }
     // Dashboard clicks
     mouse_dashboard(col, row, s, inner);
 }
@@ -191,12 +199,10 @@ pub fn handle_mouse_scroll(
                 } else {
                     s.commit_detail_scroll += 3;
                 }
+            } else if scroll_up {
+                if s.commit_scroll_offset >= 3 { s.commit_scroll_offset -= 3; } else { s.commit_scroll_offset = 0; }
             } else {
-                if scroll_up {
-                    if s.commit_scroll_offset >= 3 { s.commit_scroll_offset -= 3; } else { s.commit_scroll_offset = 0; }
-                } else {
-                    s.commit_scroll_offset += 3;
-                }
+                s.commit_scroll_offset += 3;
             }
         }
     } else if col >= inner.x && col < split_x {

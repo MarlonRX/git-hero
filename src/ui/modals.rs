@@ -175,10 +175,8 @@ fn setup_content(s: &AppState) -> (String, Vec<String>) {
             lines.push("Select Initial Theme:".to_string());
             lines.push(String::new());
             let themes = get_themes();
-            let start = if s.setup_cursor > 3 { s.setup_cursor - 3 } else { 0 };
-            let end = (start + 5).min(themes.len());
-            for i in start..end {
-                let t = &themes[i];
+            let start = s.setup_cursor.saturating_sub(3);
+            for (i, t) in themes.iter().enumerate().skip(start).take(5) {
                 lines.push(if i == s.setup_cursor {
                     format!(" \u{25B6} {:<20} \u{25A0}", t.name)
                 } else {
@@ -209,11 +207,9 @@ pub fn draw_theme_modal(f: &mut Frame, s: &mut AppState) {
     lines.push(format!("{}:", translate(&s.language, "theme_title")));
     lines.push(String::new());
 
-    let start = if s.theme_cursor > 4 { s.theme_cursor - 4 } else { 0 };
-    let end = (start + 9).min(themes.len());
+    let start = s.theme_cursor.saturating_sub(4);
 
-    for i in start..end {
-        let t = &themes[i];
+    for (i, t) in themes.iter().enumerate().skip(start).take(9) {
         if i == s.theme_cursor {
             lines.push(format!(" \u{25B6} {:<20} \u{25A0}", t.name));
         } else {
@@ -249,63 +245,30 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(f, modal, " \u{2753} Keyboard Shortcuts & Commands ", s.theme.surface, s.theme.accent);
 
-    let lines: Vec<&str> = if s.language == "es" {
-        vec![
-            "\u{2699} NAVEGACI\u{00D3}N \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  j/k/\u{2191}/\u{2193}  Mover cursor  | Tab  Cambiar foco",
-            "  Space      Stage/unstage archivo individual",
-            "",
-            "\u{2699} ACCIONES \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  a    Stage all cambios  |  u   Unstage all",
-            "  c    Commit (\u{2710})   |  r   Undo last commit",
-            "  p    Push               |  f   Fetch",
-            "  l    Pull               |  s   Stash / d  Pop",
-            "  b    List branches      |  n   New branch",
-            "  o    Change remote      |  t   Select theme",
-            "",
-            "\u{2699} COMANDOS \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  /config <k> <v>  Set config local",
-            "  /config-global <k> <v>  Set global",
-            "  /branch <name>   Create & switch",
-            "  /remove-repo     Delete .git dir",
-            "  /undo-commit     Reset HEAD\u{2192}1 (soft)",
-            "",
-            "  ? / Esc  Close   |  q  Quit   |  /  Cmd bar",
-        ]
-    } else {
-        vec![
-            "\u{2699} NAVIGATION \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  j/k/\u{2191}/\u{2193}  Move cursor   | Tab  Switch focus",
-            "  Space      Stage/unstage individual file",
-            "",
-            "\u{2699} ACTIONS \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  a    Stage all changes  |  u   Unstage all",
-            "  c    Commit (\u{2710})   |  r   Undo last commit",
-            "  p    Push               |  f   Fetch",
-            "  l    Pull               |  s   Stash / d  Pop",
-            "  b    List branches      |  n   New branch",
-            "  o    Change remote      |  t   Select theme",
-            "",
-            "\u{2699} COMMANDS \u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "  /config <k> <v>  Set config locally",
-            "  /config-global <k> <v>  Set globally",
-            "  /branch <name>   Create & switch",
-            "  /remove-repo     Delete .git dir",
-            "  /undo-commit     Reset HEAD\u{2192}1 (soft)",
-            "",
-            "  ? / Esc  Close   |  q  Quit   |  /  Cmd bar",
-        ]
-    };
+    // Phase 4.9: single source of truth for the command list. The
+    // static table in `Command::HELP` is reused by the CLI's `--help`
+    // output too, so adding a new command only requires editing one
+    // place.
+    let mut lines: Vec<String> = Vec::with_capacity(crate::ui::state::command::Command::HELP.len() + 4);
+    for (syntax, desc) in crate::ui::state::command::Command::HELP {
+        lines.push(format!("  {syntax:<22} {desc}"));
+    }
+    let body = lines.join("\n");
 
     let cy = inner.y + 1;
     f.render_widget(
-        Paragraph::new(lines.join("\n"))
+        Paragraph::new(body)
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
         Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height - 2 },
     );
 
+    let footer = if s.language == "es" {
+        "?/Esc Cerrar | q Salir | / Barra de comandos"
+    } else {
+        "?/Esc Close | q Quit | / Cmd bar"
+    };
     f.render_widget(
-        Paragraph::new("Press any key to close.")
+        Paragraph::new(footer)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
@@ -325,83 +288,45 @@ pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(f, modal, " \u{1F4D6} Detailed Shortcut Reference ", s.theme.surface, s.theme.accent);
 
-    let lines: Vec<&str> = if s.language == "es" {
-        vec![
-            "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "",
-            "\u{2699} Change Management",
-            "  Space (select file)  Toggle stage/unstage a single file",
-            "  a  /  /stage-all      Stage all changes (git add .)",
-            "  u  /  /unstage-all    Unstage everything (git reset HEAD)",
-            "  c  /  /commit <msg>   Create a commit; auto-stages if needed",
-            "  r  /  /undo-commit    Undo last commit (soft reset)",
-            "",
-            "\u{2699} Branches & Remote",
-            "  b  /  /branches       List all branches",
-            "  n  /  /branch <name>  Create new branch and switch to it",
-            "  /switch <name>        Switch to an existing branch",
-            "  o  /  /remote <url>   Change the 'origin' remote URL",
-            "",
-            "\u{2699} Sync (fetch/pull/push)",
-            "  f  /  /fetch          Download remote metadata (no merge)",
-            "  l  /  /pull           Download + merge remote changes",
-            "  p  /  /push           Push local commits to remote",
-            "",
-            "\u{2699} Stash",
-            "  s  /  /stash          Stash local changes away",
-            "  d  /  /stash-pop      Restore changes from the stash",
-            "",
-            "\u{2699} Configuration",
-            "  /config <k> [v]       Read or set local repo config",
-            "  /config-global <k><v> Set global config (~/.gitconfig)",
-            "",
-            "\u{2699} Other",
-            "  t  /  /themes        Open visual theme picker",
-            "  /remove-repo         Delete .git directory (no confirm!)",
-            "  /docs               This detailed reference",
-            "  ?  /  /help          Quick shortcut help",
-        ]
-    } else {
-        vec![
-            "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-            "",
-            "\u{2699} Change Management",
-            "  Space (select file)  Toggle stage/unstage a single file",
-            "  a  /  /stage-all      Stage all changes (git add .)",
-            "  u  /  /unstage-all    Unstage everything (git reset HEAD)",
-            "  c  /  /commit <msg>   Create a commit; auto-stages if needed",
-            "  r  /  /undo-commit    Undo last commit (soft reset)",
-            "",
-            "\u{2699} Branches & Remote",
-            "  b  /  /branches       List all branches",
-            "  n  /  /branch <name>  Create new branch and switch to it",
-            "  /switch <name>        Switch to an existing branch",
-            "  o  /  /remote <url>   Change the 'origin' remote URL",
-            "",
-            "\u{2699} Sync (fetch/pull/push)",
-            "  f  /  /fetch          Download remote metadata (no merge)",
-            "  l  /  /pull           Download + merge remote changes",
-            "  p  /  /push           Push local commits to remote",
-            "",
-            "\u{2699} Stash",
-            "  s  /  /stash          Stash local changes away",
-            "  d  /  /stash-pop      Restore changes from the stash",
-            "",
-            "\u{2699} Configuration",
-            "  /config <k> [v]       Read or set local repo config",
-            "  /config-global <k><v> Set global config (~/.gitconfig)",
-            "",
-            "\u{2699} Other",
-            "  t  /  /themes        Open visual theme picker",
-            "  /remove-repo         Delete .git directory (no confirm!)",
-            "  /docs               This detailed reference",
-            "  ?  /  /help          Quick shortcut help",
-        ]
-    };
+    let doc_lines: Vec<&str> = vec![
+        "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
+        "",
+        "\u{2699} Change Management",
+        "  Space (select file)  Toggle stage/unstage a single file",
+        "  a  /  /stage-all      Stage all changes (git add .)",
+        "  u  /  /unstage-all    Unstage everything (git reset HEAD)",
+        "  c  /  /commit <msg>   Create a commit; auto-stages if needed",
+        "  r  /  /undo-commit    Undo last commit (soft reset)",
+        "",
+        "\u{2699} Branches & Remote",
+        "  b  /  /branches       List all branches",
+        "  n  /  /branch <name>  Create new branch and switch to it",
+        "  /switch <name>        Switch to an existing branch",
+        "  o  /  /remote <url>   Change the 'origin' remote URL",
+        "",
+        "\u{2699} Sync (fetch/pull/push)",
+        "  f  /  /fetch          Download remote metadata (no merge)",
+        "  l  /  /pull           Download + merge remote changes",
+        "  p  /  /push           Push local commits to remote",
+        "",
+        "\u{2699} Stash",
+        "  s  /  /stash          Stash local changes away",
+        "  d  /  /stash-pop      Restore changes from the stash",
+        "",
+        "\u{2699} Configuration",
+        "  /config <k> [v]       Read or set local repo config",
+        "  /config-global <k><v> Set global config (~/.gitconfig)",
+        "",
+        "\u{2699} Other",
+        "  t  /  /themes        Open visual theme picker",
+        "  /remove-repo         Delete .git directory (asks confirmation)",
+        "  /docs               This detailed reference",
+        "  ?  /  /help          Quick shortcut help",
+    ];
 
     let cy = inner.y;
     f.render_widget(
-        Paragraph::new(lines.join("\n"))
+        Paragraph::new(doc_lines.join("\n"))
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
         Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height },
     );
@@ -470,6 +395,52 @@ pub fn draw_confirm_pull_modal(f: &mut Frame, s: &mut AppState) {
     f.render_widget(
         Paragraph::new(help).alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
+        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+    );
+}
+
+// ── Remove Repository Confirmation Modal ──────────────────────────
+
+/// Phase 3.5: red-bordered confirmation dialog for the destructive
+/// `/remove-repo` action. Distinct from the push/pull modals because the
+/// consequences are irreversible and we want extra visual weight.
+pub fn draw_confirm_remove_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
+    let mw = 60u16;
+    let mh = 9u16;
+    let mx = (area.width.saturating_sub(mw)) / 2;
+    let my = (area.height.saturating_sub(mh)) / 2;
+    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+    // Red border + red title to signal danger.
+    let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.warning);
+    draw_modal_title(
+        f,
+        modal,
+        " \u{2620}  Remove Git Repository? ",
+        s.theme.surface,
+        s.theme.warning,
+    );
+
+    let target = std::env::current_dir()
+        .map(|p| p.join(".git").to_string_lossy().into_owned())
+        .unwrap_or_else(|_| ".git".to_string());
+
+    let text = format!(
+        "This will permanently delete:\n\n  {target}\n\nThis action CANNOT be undone."
+    );
+    f.render_widget(
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.warning).bg(s.theme.surface)),
+        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+    );
+
+    let help = "Press [y] / [Enter] to DELETE  |  [n] / [Esc] to cancel";
+    f.render_widget(
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(s.theme.primary).bg(s.theme.surface).add_modifier(Modifier::BOLD)),
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
     );
 }

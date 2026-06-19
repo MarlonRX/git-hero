@@ -4,7 +4,7 @@ use crate::config::{save_config, Config};
 use crate::git;
 use crate::i18n::translate;
 use crate::theme::{get_theme_by_name, get_themes};
-use crate::ui::state::{AppState, FlatEntryKind};
+use crate::ui::state::AppState;
 
 pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
     match code {
@@ -47,7 +47,7 @@ pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
                     theme: s.theme.name.to_string(),
                 });
                 s.refresh_git_status();
-                s.status_message = translate(&s.language, "welcome_message");
+                s.status_message = translate(&s.language, "welcome_message").into_owned();
             }
             _ => {}
         },
@@ -183,7 +183,7 @@ pub fn handle_input_key(code: KeyCode, s: &mut AppState) {
         }
         KeyCode::Tab => {
             if !s.suggestions.is_empty() {
-                s.input_value = s.suggestions[s.active_sug].clone();
+                s.input_value = s.suggestions[s.active_sug].to_string();
                 s.input_cursor_pos = s.input_value.len();
                 s.update_suggestions();
             }
@@ -200,7 +200,7 @@ pub fn handle_input_key(code: KeyCode, s: &mut AppState) {
         }
         KeyCode::Enter => {
             if !s.suggestions.is_empty() && s.input_value != s.suggestions[s.active_sug] {
-                s.input_value = s.suggestions[s.active_sug].clone();
+                s.input_value = s.suggestions[s.active_sug].to_string();
                 s.input_cursor_pos = s.input_value.len();
                 s.update_suggestions();
             } else {
@@ -264,7 +264,7 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             if s.focus_pane == "files" && !s.flat_entries.is_empty() {
                 s.flat_idx = (s.flat_idx + s.flat_entries.len() - 1) % s.flat_entries.len();
                 if let Some(entry) = s.flat_entries.get(s.flat_idx) {
-                    let FlatEntryKind::File(fi) = entry.kind;
+                    let fi = entry.file_idx;
                     s.selected_file_idx = fi;
                 }
                 s.update_diff_content(); s.diff_scroll_offset = 0;
@@ -273,15 +273,15 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 s.commit_scroll_offset = 0;
                 s.commit_detail_scroll = 0;
                 s.update_diff_content(); s.diff_scroll_offset = 0;
-            } else if s.focus_pane == "diff" {
-                if s.diff_scroll_offset > 0 { s.diff_scroll_offset -= 1; }
+            } else if s.focus_pane == "diff" && s.diff_scroll_offset > 0 {
+                s.diff_scroll_offset -= 1;
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if s.focus_pane == "files" && !s.flat_entries.is_empty() {
                 s.flat_idx = (s.flat_idx + 1) % s.flat_entries.len();
                 if let Some(entry) = s.flat_entries.get(s.flat_idx) {
-                    let FlatEntryKind::File(fi) = entry.kind;
+                    let fi = entry.file_idx;
                     s.selected_file_idx = fi;
                 }
                 s.update_diff_content(); s.diff_scroll_offset = 0;
@@ -295,11 +295,12 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             }
         }
         KeyCode::Char(' ') => {
-            if s.focus_pane == "files" && !s.flat_entries.is_empty() {
-                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
-                    let FlatEntryKind::File(fi) = entry.kind;
-                    s.toggle_stage_file(fi);
-                }
+            if s.focus_pane == "files"
+                && !s.flat_entries.is_empty()
+                && let Some(entry) = s.flat_entries.get(s.flat_idx)
+            {
+                let fi = entry.file_idx;
+                s.toggle_stage_file(fi);
             }
         }
         KeyCode::Enter => {
@@ -325,11 +326,12 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                         }
                     }
                 }
-            } else if s.focus_pane == "files" && !s.flat_entries.is_empty() {
-                if let Some(entry) = s.flat_entries.get(s.flat_idx) {
-                    let FlatEntryKind::File(fi) = entry.kind;
-                    s.toggle_stage_file(fi);
-                }
+            } else if s.focus_pane == "files"
+                && !s.flat_entries.is_empty()
+                && let Some(entry) = s.flat_entries.get(s.flat_idx)
+            {
+                let fi = entry.file_idx;
+                s.toggle_stage_file(fi);
             }
         }
         // ── Extended shortcuts ──────────────────────────────────
@@ -354,42 +356,17 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::Char('l') | KeyCode::Char('L') => s.execute_command("/pull"),
         KeyCode::Char('t') | KeyCode::Char('T') => s.execute_command("/themes"),
         KeyCode::Char('y') | KeyCode::Char('Y') => {
-            // Copy current diff to clipboard (if available)
-            if !s.active_diff.is_empty() {
-                #[cfg(target_os = "macos")]
-                {
-                    use std::process::Command;
-                    let _ = Command::new("pbcopy")
-                        .stdin(std::process::Stdio::piped())
-                        .spawn()
-                        .and_then(|mut child| {
-                            use std::io::Write;
-                            child.stdin.as_mut().unwrap().write_all(s.active_diff.as_bytes())?;
-                            child.wait()
-                        });
-                    s.status_message = "Diff copied to clipboard!".to_string();
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    use std::process::Command;
-                    let _ = Command::new("xclip")
-                        .arg("-selection")
-                        .arg("clipboard")
-                        .stdin(std::process::Stdio::piped())
-                        .spawn()
-                        .and_then(|mut child| {
-                            use std::io::Write;
-                            child.stdin.as_mut().unwrap().write_all(s.active_diff.as_bytes())?;
-                            child.wait()
-                        });
-                    s.status_message = "Diff copied to clipboard!".to_string();
-                }
-                #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-                {
-                    s.status_message = "Copy not supported on this platform".to_string();
-                }
-            } else {
+            // Copy current diff to clipboard (if available).
+            // Phase 3.7: replaced `child.stdin.as_mut().unwrap()` with a
+            // `match` so a closed pipe (e.g. pbcopy not installed) is
+            // reported to the user instead of panicking.
+            if s.active_diff.is_empty() {
                 s.status_message = "Nothing to copy".to_string();
+            } else {
+                s.status_message = match copy_to_clipboard(&s.active_diff) {
+                    Ok(()) => "Diff copied to clipboard!".to_string(),
+                    Err(e) => format!("Copy failed: {e}"),
+                };
             }
         }
         KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => { s.show_help_modal = true; }
@@ -411,9 +388,7 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 if s.commit_detail_scroll >= 5 { s.commit_detail_scroll -= 5; } else { s.commit_detail_scroll = 0; }
             } else if s.focus_pane == "commits" {
                 if s.commit_scroll_offset >= 5 { s.commit_scroll_offset -= 5; } else { s.commit_scroll_offset = 0; }
-            } else {
-                if s.diff_scroll_offset >= 5 { s.diff_scroll_offset -= 5; } else { s.diff_scroll_offset = 0; }
-            }
+            } else if s.diff_scroll_offset >= 5 { s.diff_scroll_offset -= 5; } else { s.diff_scroll_offset = 0; }
         }
         _ => {}
     }
@@ -441,6 +416,32 @@ pub fn handle_confirm_pull_key(code: KeyCode, s: &mut AppState) {
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             s.show_confirm_pull = false;
+        }
+        _ => {}
+    }
+}
+
+/// Phase 3.4: keyboard handler for the new "are you sure?" modal that
+/// guards `/remove-repo`. Same pattern as the push/pull handlers, but
+/// executes the destructive action inline (there is no async command).
+pub fn handle_confirm_remove_key(code: KeyCode, s: &mut AppState) {
+    match code {
+        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+            s.show_confirm_remove = false;
+            match git::git_remove_repo() {
+                Ok(()) => {
+                    s.refresh_git_status();
+                    s.status_message =
+                        translate(&s.language, "status_remove_ok").into_owned();
+                }
+                Err(e) => {
+                    s.status_message = format!("Error removing repo: {e}");
+                }
+            }
+        }
+        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+            s.show_confirm_remove = false;
+            s.status_message = "Repository removal cancelled.".to_string();
         }
         _ => {}
     }
@@ -526,7 +527,7 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
             s.selected_commit_idx = 0;
             s.diff_scroll_offset = 0;
             s.refresh_git_status();
-            s.status_message = translate(&s.language, "status_commit_success");
+            s.status_message = translate(&s.language, "status_commit_success").into_owned();
             s.show_commit_modal = false;
         }
         return;
@@ -601,5 +602,58 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
             s.commit_cursor_col += 1;
         }
         _ => {}
+    }
+}
+
+/// Pipe `text` into the platform's clipboard helper (`pbcopy` on macOS,
+/// `xclip` on Linux). Returns `Err` if the helper is missing, can't be
+/// spawned, or the pipe is closed before the write completes.
+///
+/// Phase 3.7: this used to be inline with `child.stdin.as_mut().unwrap()`
+/// inside an `and_then`, which panicked when the pipe was unexpectedly
+/// closed (e.g. pbcopy not installed, broken xclip). Reporting the error is
+/// strictly better than crashing the TUI.
+fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    #[cfg(target_os = "macos")]
+    let mut cmd = Command::new("pbcopy");
+    #[cfg(target_os = "macos")]
+    {
+        cmd.stdin(Stdio::piped());
+    }
+
+    #[cfg(target_os = "linux")]
+    let mut cmd = Command::new("xclip");
+    #[cfg(target_os = "linux")]
+    {
+        cmd.arg("-selection").arg("clipboard").stdin(Stdio::piped());
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = text; // Silence unused warning.
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "clipboard copy not supported on this platform",
+        ));
+    }
+
+    let mut child = cmd.spawn()?;
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin.write_all(text.as_bytes())?;
+    } else {
+        return Err(std::io::Error::other(
+            "clipboard helper closed its stdin before we could write",
+        ));
+    }
+    let status = child.wait()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "clipboard helper exited with {status}"
+        )))
     }
 }

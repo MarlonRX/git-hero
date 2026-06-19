@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 
 use crate::git;
 use crate::theme::get_themes;
-use crate::ui::state::{AppState, FlatEntryKind};
+use crate::ui::state::AppState;
 
 pub fn mouse_setup(col: u16, row: u16, s: &mut AppState, area: Rect) {
     let mw = 60; let mh = 14;
@@ -14,7 +14,7 @@ pub fn mouse_setup(col: u16, row: u16, s: &mut AppState, area: Rect) {
             1 | 2 => { if idx < 2 { s.setup_cursor = idx; } }
             3 => {
                 let themes = get_themes();
-                let start = if s.setup_cursor > 3 { s.setup_cursor - 3 } else { 0 };
+                let start = s.setup_cursor.saturating_sub(3);
                 let clicked = start + idx;
                 if clicked < themes.len() { s.setup_cursor = clicked; }
             }
@@ -29,7 +29,7 @@ pub fn mouse_theme(col: u16, row: u16, s: &mut AppState, area: Rect) {
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
     if col >= mx + 2 && col < mx + mw - 2 && row >= my + 2 && row < my + mh - 3 {
-        let start = if s.theme_cursor > 4 { s.theme_cursor - 4 } else { 0 };
+        let start = s.theme_cursor.saturating_sub(4);
         let idx = start + row.saturating_sub(my + 2) as usize;
         if idx < themes.len() {
             s.theme_cursor = idx; s.theme = themes[idx]; s.update_diff_content();
@@ -42,7 +42,7 @@ pub fn mouse_init_wizard(_col: u16, row: u16, s: &mut AppState, inner: Rect) {
     let clicked = row.saturating_sub(py + 2);
     match s.init_wizard_step {
         1 => {
-            if clicked >= 3 && clicked <= 5 {
+            if (3..=5).contains(&clicked) {
                 let idx = clicked as usize - 3;
                 s.init_cursor = idx;
                 if idx == 0 { s.init_branch_name = "main".into(); s.init_wizard_step = 2; s.input_value.clear(); }
@@ -104,7 +104,7 @@ pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, inner: Rect) {
                 s.focus_pane = "files".into();
                 s.flat_idx = clicked;
                 s.diff_scroll_offset = 0;
-                let FlatEntryKind::File(fi) = s.flat_entries[clicked].kind;
+                let fi = s.flat_entries[clicked].file_idx;
                 s.selected_file_idx = fi;
                 if col >= inner.x + 2 && col <= inner.x + 6 {
                     s.toggle_stage_file(fi);
