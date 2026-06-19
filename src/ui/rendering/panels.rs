@@ -6,8 +6,23 @@ use ratatui::{
     Frame,
 };
 
-use crate::ui::state::{AppState, FlatEntryKind, GitCommit};
+use crate::ui::state::{AppState, GitCommit};
 use super::components::{draw_solid_border, draw_solid_hline, draw_continuous_border, soften, short_path};
+
+/// Phase 4.10: keyboard shortcuts shown at the bottom of the sidebar.
+/// Static slice — zero allocations for the strings themselves. Each
+/// render wraps them in styled `Span`s using the current theme.
+const SHORTCUT_LINES: &[&str] = &[
+    " a Stage all  u Unstage all",
+    " c Commit     r Undo commit",
+    " p Push       f Fetch",
+    " l Pull       s Stash",
+    " d Stash pop  n New branch",
+    " b Branches   o Remote",
+    " t Theme      Spc Stage",
+    " Enter Detail y Copy diff",
+    " Scroll: PgUp/PgDn or Mouse  ? Help q Quit",
+];
 
 pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
     f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
@@ -302,7 +317,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     };
 
     if s.files.is_empty() {
-        let clean = if s.language == "es" { "\u{2713} Working directory clean" } else { "\u{2713} Working directory clean" };
+        let clean = "\u{2713} Working directory clean";
         f.render_widget(
             Paragraph::new(clean).style(Style::default().fg(s.theme.success).bg(s.theme.background).add_modifier(Modifier::BOLD)),
             files_inner,
@@ -345,7 +360,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         
         let items: Vec<ListItem> = s.flat_entries.iter().enumerate().map(|(i, entry)| {
             let pre = if i == s.flat_idx && s.focus_pane == "files" { "\u{25B6} " } else { "  " };
-            let FlatEntryKind::File(fi) = entry.kind;
+            let fi = entry.file_idx;
 
             let f = &s.files[fi];
             let fg = if f.staged { s.theme.success } else if f.status == "??" { s.theme.dimmed } else { s.theme.warning };
@@ -410,17 +425,14 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         height: shortcuts_area.height.saturating_sub(2),
     };
 
-    let lines = vec![
-        Line::from(Span::styled(" a Stage all  u Unstage all", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" c Commit     r Undo commit", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" p Push       f Fetch", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" l Pull       s Stash", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" d Stash pop  n New branch", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" b Branches   o Remote", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" t Theme      Spc Stage", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" Enter Detail y Copy diff", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-        Line::from(Span::styled(" Scroll: PgUp/PgDn or Mouse  ? Help q Quit", Style::default().fg(s.theme.dimmed).bg(s.theme.background))),
-    ];
+    // Phase 4.10: shortcut labels live in a `static` slice. The styled
+    // `Line`/`Span` is built per-frame (so the theme can change at
+    // runtime) but the strings themselves are zero-allocation.
+    let style = Style::default().fg(s.theme.dimmed).bg(s.theme.background);
+    let lines: Vec<Line> = SHORTCUT_LINES
+        .iter()
+        .map(|text| Line::from(Span::styled(*text, style)))
+        .collect();
     f.render_widget(Paragraph::new(lines).style(Style::default().bg(s.theme.background)), shortcuts_inner);
 
     let right_constraints: Vec<Constraint> = if s.focus_pane == "commits" {
@@ -510,7 +522,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             commits_inner,
         );
     } else if s.show_commit_detail && !s.commit_detail_diff.is_empty() {
-        let commit_theme = s.theme.clone();
+        let commit_theme = s.theme;
         let c_warn = soften(commit_theme.warning, commit_theme.background, 0.25);
         let c_succ = soften(commit_theme.success, commit_theme.background, 0.25);
         let detail_lines: Vec<Line> = s.commit_detail_diff.split('\n')
@@ -544,13 +556,15 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             .collect();
         f.render_widget(Paragraph::new(detail_lines).style(Style::default().bg(s.theme.background)), commits_inner);
     } else {
-        let visible_commits: Vec<&GitCommit> = s.commits.iter()
-            .skip(s.commit_scroll_offset)
-            .take(commits_inner.height as usize)
-            .collect();
-        
-        let items: Vec<ListItem> = visible_commits.iter().enumerate().map(|(i, c)| {
-            let actual_idx = s.commits.iter().position(|commit| commit.hash == c.hash).unwrap_or(i);
+        // Phase 4.11: O(n) slice + O(1) per-item index lookup. The previous
+        // version did `s.commits.iter().position(|c| c.hash == c.hash)` per
+        // visible commit, which is O(n²) for repos with many commits.
+        let start = s.commit_scroll_offset.min(s.commits.len());
+        let end = (start + commits_inner.height as usize).min(s.commits.len());
+        let visible: &[GitCommit] = &s.commits[start..end];
+
+        let items: Vec<ListItem> = visible.iter().enumerate().map(|(i, c)| {
+            let actual_idx = start + i;
             let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
             let mut subj = c.subject.clone();
             let sw = right.width.saturating_sub(36) as usize;
@@ -613,7 +627,7 @@ fn draw_compact(f: &mut Frame, s: &mut AppState, body: Rect, header_h: u16) {
 }
 
 pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
-    let ch = (area.height * 35 / 100).min(20).max(6);
+    let ch = (area.height * 35 / 100).clamp(6, 20);
     let cw = (area.width * 80 / 100).min(100);
     let cx = (area.width.saturating_sub(cw)) / 2;
     let cy = area.height.saturating_sub(ch + 1);
