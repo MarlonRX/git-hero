@@ -19,7 +19,7 @@ NC='\033[0m'
 # ── Configuration ────────────────────────────────────────────────────────
 REPO="MarlonRX/git-hero"
 REPO_URL="https://github.com/${REPO}"
-APP_NAME="git-hero"
+APP_NAME="gith"
 
 # ── Helper functions ─────────────────────────────────────────────────────
 status_ok()   { echo -e "  ${GREEN}✔${NC}  $1"; }
@@ -120,8 +120,8 @@ if [ "$HAS_GH" = true ]; then
         target/release-artifacts/*.tar.gz \
         target/release-artifacts/*.zip \
         target/release-artifacts/checksums.txt \
-        --title "git-hero $VERSION" \
-        --notes "Release $TAG of git-hero" \
+        --title "gith $VERSION" \
+        --notes "Release $TAG of gith" \
         --draft
     status_ok "Release created (draft)"
     echo -e "  ${DIM}Review:${NC} gh release view $TAG --web"

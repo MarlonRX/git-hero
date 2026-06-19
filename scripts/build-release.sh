@@ -20,7 +20,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 VERSION="${1:-$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)}"
-BINARY="git-hero"
+BINARY="gith"
 RELEASE_DIR="target/releases/${VERSION}"
 DIST_DIR="target/dist/${VERSION}"
 

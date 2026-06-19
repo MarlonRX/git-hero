@@ -1,5 +1,5 @@
 [package]
-name = "git-hero"
+name = "gith"
 version = "0.2.0"
 edition = "2024"
 description = "Fast and visual TUI for managing Git, written in Rust with Ratatui"

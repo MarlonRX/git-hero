@@ -262,7 +262,7 @@ impl Command {
         Ok(Command::Unknown(input.to_string()))
     }
 
-    /// Static help text used by `/help` and `git-hero --help`. Single
+    /// Static help text used by `/help` and `gith --help`. Single
     /// source of truth — keeping the help modal and the CLI's `--help`
     /// output in sync is now a compile-time invariant.
     pub const HELP: &'static [(&'static str, &'static str)] = &[

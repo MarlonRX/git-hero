@@ -17,7 +17,7 @@ WHITE='\033[1;37m'
 NC='\033[0m'
 
 # ── Configuration ────────────────────────────────────────────────────────
-APP_NAME="git-hero"
+APP_NAME="gith"
 VERSION="${1:-$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)}"
 RELEASE_DIR="target/release-artifacts"
 BINARY_NAME="$APP_NAME"

@@ -1,6 +1,6 @@
 # Maintainer: Marlon Ramirez <mramirezce14@gmail.com>
-pkgname=git-hero
-pkgver=0.1.0
+pkgname=gith
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="Fast and visual TUI for managing Git, written in Rust with Ratatui"
 arch=('x86_64' 'aarch64')
@@ -9,8 +9,8 @@ license=('MIT')
 depends=('git')
 makedepends=('cargo' 'rust')
 optdepends=()
-provides=('git-hero')
-conflicts=('git-hero')
+provides=('gith')
+conflicts=('gith' 'git-hero')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/MarlonRX/git-hero/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('REPLACE_WITH_ACTUAL_SHA256')
 
@@ -36,7 +36,7 @@ check() {
 
 package() {
     cd "$pkgname-$pkgver"
-    install -Dm755 "target/release/git-hero" "$pkgdir/usr/bin/git-hero"
+    install -Dm755 "target/release/gith" "$pkgdir/usr/bin/gith"
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

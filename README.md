@@ -1,8 +1,9 @@
-# git-hero 🚀
+# Git Hero 🚀
 
 > **[English](#english)** · **[Español](#español)**
 
-A fast and visual Terminal UI (TUI) application for managing Git, written in **Rust** with [Ratatui](https://ratatui.rs/).
+A fast and visual Terminal UI (TUI) for Git, written in **Rust** with [Ratatui](https://ratatui.rs/).  
+Run it with `gith`.
 
 Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast, and read-only** to visualize your repository state and execute common Git actions.
 
@@ -53,18 +54,18 @@ curl -fsSL https://raw.githubusercontent.com/MarlonRX/git-hero/main/scripts/inst
 **Homebrew (macOS / Linux):**
 ```bash
 brew tap MarlonRX/git-hero
-brew install git-hero
+brew install gith
 ```
 
 **Cargo (any platform, including Windows):**
 ```bash
-cargo install git-hero
+cargo install gith
 ```
 
 **Windows (Scoop):**
 ```powershell
 scoop bucket add MarlonRX https://github.com/MarlonRX/git-hero
-scoop install git-hero
+scoop install gith
 ```
 
 **Windows (manual):**
@@ -72,18 +73,18 @@ scoop install git-hero
 2. Open a terminal (PowerShell / cmd / Git Bash)
 3. Run:
    ```powershell
-   cargo install git-hero
+   cargo install gith
    ```
 
 ### Build from Source
 
 ```bash
 git clone https://github.com/MarlonRX/git-hero.git
-cd git-hero
+cd gith
 cargo build --release
 ```
 
-The binary will be at `target/release/git-hero`. Move it to a directory in your `$PATH`:
+The binary will be at `target/release/gith`. Move it to a directory in your `$PATH`.
 
 ---
 
@@ -91,20 +92,20 @@ The binary will be at `target/release/git-hero`. Move it to a directory in your 
 
 ### TUI Mode (interactive)
 ```bash
-cargo run
-# or after building:
-./target/release/git-hero
+gith
+# or after building from source:
+./target/release/gith
 ```
 
 ### CLI Mode (non-interactive)
 ```bash
-cargo run -- -cli
+gith -cli
 ```
 
 ### Debug Mode
 Generates detailed logs in `/tmp/git-hero-debug.log`:
 ```bash
-cargo run -- --debug
+gith --debug
 tail -f /tmp/git-hero-debug.log
 ```
 
@@ -157,7 +158,7 @@ tail -f /tmp/git-hero-debug.log
 ## 📂 Project Structure
 
 ```text
-git-hero/
+gith/
 ├── Cargo.toml              # Dependencies (ratatui, crossterm, dirs, serde)
 ├── README.md               # This file
 ├── .gitignore              # Ignored files
@@ -270,7 +271,7 @@ Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast
 cargo build --release
 ```
 
-El binario estará en `target/release/git-hero`. Puedes moverlo a `/usr/local/bin/` para tenerlo disponible globalmente.
+El binario estará en `target/release/gith`. Puedes moverlo a `/usr/local/bin/` para tenerlo disponible globalmente.
 
 ---
 
@@ -280,7 +281,7 @@ El binario estará en `target/release/git-hero`. Puedes moverlo a `/usr/local/bi
 ```bash
 cargo run
 # o después de compilar:
-./target/release/git-hero
+./target/release/gith
 ```
 
 ### Modo CLI (no interactivo)
@@ -344,10 +345,10 @@ tail -f /tmp/git-hero-debug.log
 ## 📂 Estructura del Proyecto
 
 ```text
-git-hero/
-├── Cargo.toml              # Dependencias (ratatui, crossterm, dirs, serde)
-├── README.md               # Este archivo
-├── .gitignore              # Archivos ignorados
+gith/
+├── Cargo.toml              # Dependencies (ratatui, crossterm, dirs, serde)
+├── README.md               # This file
+├── .gitignore              # Ignored files
 └── src/
     ├── main.rs             # Entrada principal y CLI args
     ├── config.rs           # Carga/guarda configuración del usuario

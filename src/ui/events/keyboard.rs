@@ -555,8 +555,8 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
         return;
     }
     
-    // Confirm commit: Y or Enter
-    if code == KeyCode::Char('y') || code == KeyCode::Char('Y') || code == KeyCode::Enter {
+    // Confirm commit: Enter only (avoid accidental commit when typing 'y')
+    if code == KeyCode::Enter {
         let msg = s.commit_message_lines.join("\n");
         let msg = msg.trim();
         if msg.is_empty() {
