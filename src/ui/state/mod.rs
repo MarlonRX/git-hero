@@ -3,10 +3,36 @@ use std::time::SystemTime;
 
 use crate::config::{load_config, Config};
 use crate::git;
+use crate::log;
 use crate::theme::{get_theme_by_name, Theme};
 
+pub mod command;
 pub mod commands;
+pub mod icons;
 pub mod suggestions;
+
+/// Identifies the *input* to `update_diff_content` so we can skip git
+/// invocations when the user (or the auto-refresh loop) re-asks for the
+/// same thing. Only the fields that influence the git output are part of
+/// the key — theme and width are handled by the line cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DiffKey {
+    /// Showing the file list of a commit (focus = "commits").
+    Commit(String),
+    /// Showing the diff of a working-tree file (focus != "commits").
+    File {
+        path: String,
+        /// Cached copy of `GitFile::staged` so the key invalidates correctly
+        /// when the user stages/unstages.
+        staged: bool,
+        /// Status string (e.g. "M", "??", "MM"). Needed to choose between
+        /// the `git diff` path and the "read file directly" path for
+        /// untracked files.
+        status: String,
+    },
+    /// No file, no commit selected — "working directory clean" or similar.
+    Empty,
+}
 
 #[derive(Debug, Clone)]
 pub enum TuiMessage {
@@ -22,13 +48,9 @@ pub struct GitFile {
 }
 
 #[derive(Clone)]
-pub enum FlatEntryKind {
-    File(usize),
-}
-
-#[derive(Clone)]
 pub struct FlatEntry {
-    pub kind: FlatEntryKind,
+    /// Index into `AppState::files`.
+    pub file_idx: usize,
 }
 
 #[derive(Clone)]
@@ -45,8 +67,8 @@ pub struct AppState {
     pub is_git_repo: bool,
     pub branch: String,
     pub remote: String,
-    pub behind: i32,
-    pub ahead: i32,
+    pub behind: u64,
+    pub ahead: u64,
 
     // ── Config State ───────────────────────────────────────────────
     pub theme: Theme,
@@ -73,15 +95,23 @@ pub struct AppState {
     pub commit_detail_scroll: usize,  // Scroll for commit detail view
     
     // ── Diff Cache (performance) ─────────────────────────────────
+    /// Last `active_diff` content rendered, used to invalidate the line cache.
     cached_diff_content: String,
     cached_diff_lines: Vec<ratatui::text::Line<'static>>,
     cached_diff_width: u16,  // Width used for side-by-side rendering
+    /// Theme name used when `cached_diff_lines` was last rendered. Phase 2.8:
+    /// re-render when the user switches theme even if `active_diff` is identical.
+    cached_diff_theme_name: Option<&'static str>,
+    /// Phase 2.5: cache of the raw git output keyed by what produced it.
+    /// Avoids re-running `git diff` 2-3 times per auto-refresh tick when the
+    /// user has not changed selection.
+    diff_cache: Option<(DiffKey, String)>,
 
     // ── Command Input ──────────────────────────────────────────────
     pub input_value: String,
     pub input_cursor_pos: usize,
     pub show_input: bool,
-    pub suggestions: Vec<String>,
+    pub suggestions: Vec<std::borrow::Cow<'static, str>>,
     pub active_sug: usize,
 
     // ── Modals ─────────────────────────────────────────────────────
@@ -116,9 +146,13 @@ pub struct AppState {
     pub commit_cursor_col: usize,
     pub commit_modal_scroll: usize,
 
-    // ── Push / Pull Confirmations ──────────────────────────────────
+    // ── Push / Pull / Remove Confirmations ─────────────────────────
     pub show_confirm_push: bool,
     pub show_confirm_pull: bool,
+    /// Phase 3.3: required confirmation before `/remove-repo` deletes
+    /// the `.git` directory. The original code had no confirmation —
+    /// see `docs.rs`: "/remove-repo         Delete .git directory (no confirm!)".
+    pub show_confirm_remove: bool,
 
     // ── Credentials Handler ────────────────────────────────────────
     pub session_id: String,
@@ -171,6 +205,8 @@ impl AppState {
             cached_diff_content: String::new(),
             cached_diff_lines: Vec::new(),
             cached_diff_width: 0,
+            cached_diff_theme_name: None,
+            diff_cache: None,
             input_value: String::new(),
             input_cursor_pos: 0,
             show_input: false,
@@ -201,9 +237,10 @@ impl AppState {
             commit_cursor_col: 0,
             commit_modal_scroll: 0,
 
-            // Push/Pull Confirmations
+            // Push/Pull/Remove Confirmations
             show_confirm_push: false,
             show_confirm_pull: false,
+            show_confirm_remove: false,
 
             // Credentials Handler
             session_id: format!("{:.3}", std::time::SystemTime::now()
@@ -231,14 +268,61 @@ impl AppState {
     pub fn refresh_git_status(&mut self) {
         self.is_git_repo = git::is_inside_work_tree();
         if self.is_git_repo {
-            self.branch = git::get_current_branch().unwrap_or_else(|_| "".to_string());
-            self.remote = git::get_remote(&self.branch);
-            self.behind = git::get_commits_behind(&self.remote, &self.branch);
-            self.ahead = git::get_commits_ahead(&self.remote, &self.branch);
+            // Single snapshot replaces 6+ separate git invocations.
+            let ahead = match git::status_snapshot() {
+                Ok(snap) => {
+                    self.branch = if snap.branch == "(detached)" {
+                        String::new()
+                    } else {
+                        snap.branch
+                    };
+                    // `upstream` is `remote/branch` — keep just the remote.
+                    self.remote = snap
+                        .upstream
+                        .split('/')
+                        .next()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or("origin")
+                        .to_string();
+                    self.behind = snap.behind;
+                    self.ahead = snap.ahead;
+                    self.files = snap.files.iter().map(file_snapshot_to_git_file).collect();
+                    self.rebuild_file_tree();
+                    self.ahead as usize
+                }
+                Err(e) => {
+                    log::log_debug(&format!("status_snapshot failed: {e}"));
+                    self.branch.clear();
+                    self.remote.clear();
+                    self.behind = 0;
+                    self.ahead = 0;
+                    self.files.clear();
+                    self.flat_entries.clear();
+                    self.status_message = format!("git status error: {e}");
+                    self.commits.clear();
+                    self.update_diff_content();
+                    return;
+                }
+            };
 
-            self.files = self.get_changed_files();
-            self.rebuild_file_tree();
-            self.commits = self.get_recent_commits();
+            // One log call, then derive per-commit `pushed` from the ahead
+            // count: the first `ahead` commits (newest) are unpushed.
+            self.commits = match git::log_snapshot(15) {
+                Ok(entries) => entries
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, entry)| GitCommit {
+                        hash: entry.hash,
+                        date: entry.date,
+                        subject: entry.subject,
+                        pushed: i >= ahead,
+                    })
+                    .collect(),
+                Err(e) => {
+                    log::log_debug(&format!("log_snapshot failed: {e}"));
+                    Vec::new()
+                }
+            };
 
             if !self.files.is_empty() && self.selected_file_idx >= self.files.len() {
                 self.selected_file_idx = 0;
@@ -264,73 +348,19 @@ impl AppState {
             return;
         }
         let git_index = std::path::Path::new(".git/index");
-        if let Ok(meta) = std::fs::metadata(git_index) {
-            if let Ok(mtime) = meta.modified() {
-                match self.last_git_mtime {
-                    Some(prev) if prev == mtime => {
-                        // No changes
-                    }
-                    _ => {
-                        self.last_git_mtime = Some(mtime);
-                        self.refresh_git_status();
-                    }
+        if let Ok(meta) = std::fs::metadata(git_index)
+            && let Ok(mtime) = meta.modified()
+        {
+            match self.last_git_mtime {
+                Some(prev) if prev == mtime => {
+                    // No changes
+                }
+                _ => {
+                    self.last_git_mtime = Some(mtime);
+                    self.refresh_git_status();
                 }
             }
         }
-    }
-
-    fn get_changed_files(&self) -> Vec<GitFile> {
-        let mut files = Vec::new();
-
-        let staged_set: std::collections::HashSet<String> = git::run_git(
-            &["diff", "--name-only", "--cached"]
-        ).unwrap_or_default()
-        .split('\n')
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .collect();
-
-        if let Ok(out) = git::run_git(&["status", "--porcelain"]) {
-            for line in out.split('\n') {
-                if line.is_empty() {
-                    continue;
-                }
-                let line = line.trim_end_matches(['\r', '\n']);
-                if line.len() < 4 {
-                    continue;
-                }
-                let bytes = line.as_bytes();
-                let x = bytes[0] as char;
-                let y = bytes[1] as char;
-                let raw_path = if let Some(idx) = line.find(" -> ") {
-                    &line[idx + 4..]
-                } else {
-                    &line[3..]
-                };
-                let path = raw_path.trim().to_string();
-
-                let staged = staged_set.contains(&path);
-
-                let status = if x == '?' && y == '?' {
-                    "??".to_string()
-                } else if staged && y != ' ' {
-                    format!("{}{}", x, y)
-                } else if staged {
-                    x.to_string()
-                } else if y != ' ' {
-                    y.to_string()
-                } else {
-                    " ".to_string()
-                };
-
-                files.push(GitFile {
-                    path,
-                    staged,
-                    status,
-                });
-            }
-        }
-        files
     }
 
     pub fn rebuild_file_tree(&mut self) {
@@ -345,69 +375,69 @@ impl AppState {
         indices.sort_by(|&a, &b| self.files[a].path.cmp(&self.files[b].path));
 
         for fi in indices {
-            self.flat_entries.push(FlatEntry {
-                kind: FlatEntryKind::File(fi),
-            });
+            self.flat_entries.push(FlatEntry { file_idx: fi });
         }
 
         if self.flat_idx >= self.flat_entries.len() {
             self.flat_idx = self.flat_entries.len().saturating_sub(1);
         }
 
-        if let Some(entry) = self.flat_entries.get(self.flat_idx) {
-            let FlatEntryKind::File(fi) = entry.kind;
-            if fi < self.files.len() {
-                self.selected_file_idx = fi;
-            }
-        }
-    }
-
-    fn get_recent_commits(&self) -> Vec<GitCommit> {
-        let mut commits = Vec::new();
-
-        let remote = &self.remote;
-        let branch = &self.branch;
-        let mut unpushed: Vec<String> = Vec::new();
-        if !remote.is_empty() && !branch.is_empty() {
-            if let Ok(out) = git::run_git(&[
-                "log", "--oneline", &format!("{}/{}..HEAD", remote, branch),
-            ]) {
-                for line in out.split('\n') {
-                    if let Some(hash) = line.split(' ').next() {
-                        unpushed.push(hash.to_string());
-                    }
-                }
-            }
-        }
-
-        if let Ok(out) =
-            git::run_git(&["log", "-n", "15", "--pretty=format:%h|%ar|%an|%s"])
+        if let Some(entry) = self.flat_entries.get(self.flat_idx)
+            && entry.file_idx < self.files.len()
         {
-            for line in out.split('\n') {
-                let parts: Vec<&str> = line.split('|').collect();
-                if parts.len() >= 4 {
-                    let hash = parts[0].to_string();
-                    let pushed = !unpushed.contains(&hash);
-                    commits.push(GitCommit {
-                        hash,
-                        date: parts[1].to_string(),
-                        subject: parts[3].to_string(),
-                        pushed,
-                    });
-                }
-            }
+            self.selected_file_idx = entry.file_idx;
         }
-        commits
     }
 
     pub fn update_diff_content(&mut self) {
+        // Phase 2.5: derive a cache key from the *inputs* to the diff
+        // computation. Re-asking for the same key skips git entirely —
+        // important for the auto-refresh loop (2s tick) when selection is
+        // unchanged.
+        let key = self.diff_key();
+
+        if let Some((cached_key, _)) = &self.diff_cache
+            && *cached_key == key
+        {
+            return; // Cache hit: active_diff already correct.
+        }
+
+        // Cache miss: run git (or read the untracked file) and store the result.
+        self.active_diff = self.compute_diff(&key);
+        self.diff_cache = Some((key, self.active_diff.clone()));
+
+        // Invalidate the line cache — it was tied to the previous content.
+        self.cached_diff_content.clear();
+        self.cached_diff_lines.clear();
+        self.cached_diff_width = 0;
+        self.cached_diff_theme_name = None;
+    }
+
+    /// Compute the cache key for the current selection. See [`DiffKey`].
+    fn diff_key(&self) -> DiffKey {
         if self.focus_pane == "commits"
             && !self.commits.is_empty()
             && self.selected_commit_idx < self.commits.len()
         {
-            let hash = &self.commits[self.selected_commit_idx].hash;
-            self.active_diff = match git::run_git(&["show", "--name-status", "--format=", hash]) {
-                Ok(out) => {
+            DiffKey::Commit(self.commits[self.selected_commit_idx].hash.clone())
+        } else if !self.files.is_empty() && self.selected_file_idx < self.files.len() {
+            let file = &self.files[self.selected_file_idx];
+            DiffKey::File {
+                path: file.path.clone(),
+                staged: file.staged,
+                status: file.status.clone(),
+            }
+        } else {
+            DiffKey::Empty
+        }
+    }
+
+    /// Actually run git (or read the file) for the given key. The only place
+    /// `git diff` / `git show` should be invoked from.
+    fn compute_diff(&self, key: &DiffKey) -> String {
+        match key {
+            DiffKey::Commit(hash) => git::run_git(&["show", "--name-status", "--format=", hash])
+                .map(|out| {
                     let entries: Vec<String> = out
                         .lines()
                         .filter(|l| !l.is_empty())
@@ -418,73 +448,81 @@ impl AppState {
                     } else {
                         entries.join("\n")
                     }
+                })
+                .unwrap_or_else(|e| format!("Error showing commit: {}", e)),
+            DiffKey::File { path, staged, status } => {
+                if status == "??" {
+                    return fs::read_to_string(path)
+                        .map(|content| {
+                            let lines: Vec<&str> = content.split('\n').collect();
+                            if lines.len() > 100 {
+                                let mut truncated = lines[..100].join("\n");
+                                truncated.push_str("\n... (truncated)");
+                                truncated
+                            } else {
+                                content
+                            }
+                        })
+                        .unwrap_or_else(|e| format!("Error reading untracked file: {}", e));
                 }
-                Err(e) => format!("Error showing commit: {}", e),
-            };
-        } else if !self.files.is_empty() && self.selected_file_idx < self.files.len() {
-            let file = &self.files[self.selected_file_idx];
-            if file.status == "??" {
-                self.active_diff = match fs::read_to_string(&file.path) {
-                    Ok(content) => {
-                        let lines: Vec<&str> = content.split('\n').collect();
-                        if lines.len() > 100 {
-                            let mut truncated = lines[..100].join("\n");
-                            truncated.push_str("\n... (truncated)");
-                            truncated
-                        } else {
-                            content
-                        }
-                    }
-                    Err(e) => format!("Error reading untracked file: {}", e),
-                };
-            } else {
                 let mut diff_output = String::new();
-                
-                if file.staged {
-                    match git::run_git(&["diff", "--cached", "--", &file.path]) {
-                        Ok(out) if !out.is_empty() => {
-                            diff_output.push_str(&format!("── Staged changes ──\n{}\n", out));
-                        }
-                        _ => {}
-                    }
+                if *staged
+                    && let Ok(out) = git::run_git(&["diff", "--cached", "--", path])
+                    && !out.is_empty()
+                {
+                    diff_output.push_str(&format!("── Staged changes ──\n{}\n", out));
                 }
-                
-                match git::run_git(&["diff", "--", &file.path]) {
-                    Ok(out) if !out.is_empty() => {
-                        if !diff_output.is_empty() {
-                            diff_output.push_str("── Unstaged changes ──\n");
-                        }
-                        diff_output.push_str(&out);
+                if let Ok(out) = git::run_git(&["diff", "--", path])
+                    && !out.is_empty()
+                {
+                    if !diff_output.is_empty() {
+                        diff_output.push_str("── Unstaged changes ──\n");
                     }
-                    _ => {}
+                    diff_output.push_str(&out);
                 }
-                
-                self.active_diff = if diff_output.is_empty() {
+                if diff_output.is_empty() {
                     "No changes.".to_string()
                 } else {
                     diff_output
-                };
+                }
             }
-        } else {
-            self.active_diff = "Working directory clean.".to_string();
+            DiffKey::Empty => "Working directory clean.".to_string(),
         }
+    }
+
+    /// Invalidate the diff cache when `active_diff` is set directly by a
+    /// command (e.g. `/branch` or `/config` writing the branch/config list
+    /// into the diff panel).
+    pub fn invalidate_diff_cache(&mut self) {
+        self.diff_cache = None;
         self.cached_diff_content.clear();
         self.cached_diff_lines.clear();
         self.cached_diff_width = 0;
+        self.cached_diff_theme_name = None;
     }
 
     pub fn get_cached_diff_lines(&mut self, width: u16) -> Vec<ratatui::text::Line<'static>> {
-        let needs_recompute = self.cached_diff_content != self.active_diff 
-                           || self.cached_diff_width != width;
-        
+        // Phase 2.8: include theme.name in the key so theme changes force a
+        // re-render even when `active_diff` content is identical.
+        let needs_recompute = self.cached_diff_content != self.active_diff
+            || self.cached_diff_width != width
+            || self.cached_diff_theme_name != Some(self.theme.name);
+
         if needs_recompute {
-            crate::log_debug(&format!("Diff cache miss: {} bytes, width={}", self.active_diff.len(), width));
+            log::log_debug(&format!(
+                "Diff cache miss: {} bytes, width={}",
+                self.active_diff.len(),
+                width
+            ));
             self.cached_diff_content = self.active_diff.clone();
             self.cached_diff_width = width;
+            self.cached_diff_theme_name = Some(self.theme.name);
             self.cached_diff_lines = super::rendering::render_diff_side_by_side(
-                &self.active_diff, width, &self.theme
+                &self.active_diff,
+                width,
+                &self.theme,
             );
-            crate::log_debug(&format!("Diff cached: {} lines", self.cached_diff_lines.len()));
+            log::log_debug(&format!("Diff cached: {} lines", self.cached_diff_lines.len()));
         }
         self.cached_diff_lines.clone()
     }
@@ -504,34 +542,31 @@ impl AppState {
     }
 
     pub fn get_icon_str(&self, key: &str) -> &'static str {
-        if self.nerd_font {
-            match key {
-                "branch" => "\u{E725}",
-                "dir" => "\u{F07C}",
-                "fetch" => "\u{F021}",
-                "commit" => "\u{F417}",
-                "mod" => "\u{F448}",
-                "add" => "\u{F067}",
-                "del" => "\u{F057}",
-                "untracked" => "\u{F128}",
-                "ok" => "\u{2714}",
-                "warn" => "\u{26A0}",
-                _ => "",
-            }
-        } else {
-            match key {
-                "branch" => "\u{2A}",
-                "dir" => "\u{2F}",
-                "fetch" => "\u{2193}",
-                "commit" => "\u{23}",
-                "mod" => "\u{2192}",
-                "add" => "\u{2B}",
-                "del" => "\u{2212}",
-                "untracked" => "\u{3F}",
-                "ok" => "\u{2713}",
-                "warn" => "\u{21}",
-                _ => "",
-            }
-        }
+        icons::lookup(self.nerd_font, key)
+    }
+
+    /// Returns `true` if any modal is currently on top of the dashboard.
+    /// Modals are mutually exclusive (only one shown at a time), but the
+    /// renderer still asks "is *any* modal up?" to decide whether to
+    /// paint the dimming overlay and hide the mini-console.
+    pub fn has_active_modal(&self) -> bool {
+        self.show_theme_modal
+            || self.show_help_modal
+            || self.show_docs_modal
+            || self.show_commit_modal
+            || self.show_confirm_push
+            || self.show_confirm_pull
+            || self.show_confirm_remove
+            || self.show_credentials_modal
+    }
+}
+
+/// Convert a `git::FileSnapshot` (from the new v2-porcelain parser) into
+/// the legacy `GitFile` shape the UI still consumes.
+fn file_snapshot_to_git_file(fs: &git::FileSnapshot) -> GitFile {
+    GitFile {
+        path: fs.path.clone(),
+        staged: fs.staged(),
+        status: fs.status(),
     }
 }
