@@ -12,6 +12,8 @@ Cargo.lock
 
 # IDE / Editor
 .vscode/
+.opencode/
+opencode.json
 .idea/
 *.swp
 *.swo
@@ -41,3 +43,8 @@ logs/
 # Local development plans
 /plans/
 /PLANS/
+
+# OpenCode / agent skills downloaded locally
+/.agents/
+/.opencode/skills/
+/skills-lock.json
