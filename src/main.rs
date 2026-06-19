@@ -2,30 +2,13 @@ mod config;
 mod theme;
 mod i18n;
 mod git;
+mod git_error;
+mod log;
 mod cli;
 mod ui;
 mod version;
 
 use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
-
-fn log_debug(msg: &str) {
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/tmp/git-hero-debug.log")
-    {
-        let _ = writeln!(file, "[{}] {}", chrono_lite(), msg);
-    }
-}
-
-fn chrono_lite() -> String {
-    // Simple timestamp without external crate
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    format!("{:.3}", d.as_secs_f64())
-}
 
 fn run_askpass_helper(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     use std::io::Write;
@@ -43,8 +26,11 @@ fn run_askpass_helper(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
     // Write prompt message to prompt file
     std::fs::write(&prompt_path, prompt)?;
 
-    // Poll for the response file
-    let mut ticks = 0;
+    // Phase 3.6: poll every 500 ms instead of 50 ms. A human typing a
+    // password is at least one order of magnitude slower than 20 Hz, and
+    // the helper process is idle most of the time — 90% less wakeups.
+    // Total timeout: 300 ticks × 500 ms = 2.5 minutes (was 5 minutes).
+    let mut ticks = 0u32;
     loop {
         if response_path.exists() {
             let res = std::fs::read_to_string(&response_path)?;
@@ -54,9 +40,9 @@ fn run_askpass_helper(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
             let _ = std::fs::remove_file(&response_path);
             break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::thread::sleep(std::time::Duration::from_millis(500));
         ticks += 1;
-        if ticks > 6000 { // 5 minutes timeout
+        if ticks > 300 {
             let _ = std::fs::remove_file(&prompt_path);
             return Err("Askpass timed out waiting for user input".into());
         }
@@ -78,15 +64,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Clear debug log on startup
     if is_debug {
-        let _ = std::fs::write("/tmp/git-hero-debug.log", "");
-        log_debug("=== Git Hero starting in DEBUG mode ===");
+        log::clear();
+        log::log_debug("=== Git Hero starting in DEBUG mode ===");
     }
 
     if is_cli {
-        if is_debug { log_debug("Running in CLI mode"); }
+        if is_debug { log::log_debug("Running in CLI mode"); }
         cli::run_cli_flow()?;
     } else {
-        if is_debug { log_debug("Running in TUI mode"); }
+        if is_debug { log::log_debug("Running in TUI mode"); }
         ui::run_tui(is_debug)?;
     }
 
