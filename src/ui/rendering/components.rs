@@ -148,22 +148,27 @@ pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Li
                     Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
                     Span::styled(fit(text), Style::default().fg(theme.foreground).bg(succ_bg)),
                 ])
-            } else if line.starts_with("---") || line.starts_with("+++") {
-                let text = if line.len() > 4 { &line[4..] } else { "" };
+            } else if let Some(text) = line.strip_prefix("--- ") {
                 let col = fit(text);
                 Line::from(vec![
                     Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
                     Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
                     Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
                 ])
-            } else if line.starts_with(' ') {
-                let text = if line.len() > 1 { &line[1..] } else { "" };
+            } else if let Some(text) = line.strip_prefix("+++ ") {
                 let col = fit(text);
                 Line::from(vec![
-                    Span::styled(col.clone(), Style::default().fg(theme.foreground).bg(theme.background)),
+                    Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
                     Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
-                    Span::styled(col, Style::default().fg(theme.foreground).bg(theme.background)),
+                    Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
                 ])
+            } else if let Some(text) = line.strip_prefix(' ') {
+                    let col = fit(text);
+                    Line::from(vec![
+                        Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
+                        Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                        Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
+                    ])
             } else {
                 Line::from(vec![
                     Span::styled(fit(line), Style::default().fg(theme.foreground).bg(theme.background)),
