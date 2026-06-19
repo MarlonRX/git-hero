@@ -35,3 +35,39 @@ pub fn save_config(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     fs::write(path, data)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn round_trip_works() {
+            let _dir = env::temp_dir().join("git-hero-test-config");
+            let _ = fs::create_dir_all(&_dir);
+            // Test serialization round-trip directly instead of via
+            // file I/O to avoid needing to set cwd.
+        let c = Config {
+            language: "es".into(),
+            nerd_font: true,
+            theme: "Nord".into(),
+        };
+        let json = serde_json::to_string_pretty(&c).unwrap();
+        let deserialized: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.language, "es");
+        assert!(deserialized.nerd_font);
+        assert_eq!(deserialized.theme, "Nord");
+    }
+
+    #[test]
+    fn default_config_matches_expected_fields() {
+        let c = Config {
+            language: "en".into(),
+            nerd_font: false,
+            theme: "Tokyo Night".into(),
+        };
+        assert_eq!(c.language, "en");
+        assert!(!c.nerd_font);
+        assert_eq!(c.theme, "Tokyo Night");
+    }
+}

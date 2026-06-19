@@ -173,3 +173,44 @@ pub fn get_theme_by_name(name: &str) -> Theme {
     }
     themes[1] // Tokyo Night default
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_theme_has_unique_name() {
+        let themes = get_themes();
+        let names: std::collections::HashSet<&str> = themes.iter().map(|t| t.name).collect();
+        assert_eq!(names.len(), themes.len());
+    }
+
+    #[test]
+    fn all_theme_names_are_non_empty() {
+        for t in get_themes() {
+            assert!(!t.name.is_empty(), "theme has empty name");
+        }
+    }
+
+    #[test]
+    fn name_lookup_finds_every_theme() {
+        for t in get_themes() {
+            let found = get_theme_by_name(t.name);
+            assert_eq!(found.name, t.name, "failed to find theme '{}'", t.name);
+        }
+    }
+
+    #[test]
+    fn unknown_name_returns_tokyo_night() {
+        let t = get_theme_by_name("BogusThemeXYZ");
+        assert_eq!(t.name, "Tokyo Night");
+    }
+
+    #[test]
+    fn theme_is_copy() {
+        let themes = get_themes();
+        let t1 = themes[0];
+        let t2 = t1; // Copy
+        assert_eq!(t1.name, t2.name);
+    }
+}
