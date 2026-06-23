@@ -5,6 +5,34 @@ All notable changes to Git Hero are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2025-07-23
+
+### Fixed
+
+- **Files incorrectly appearing as staged (selected) at startup**: in porcelain
+  v2 mode, the index-status field (X) used `.` to mean "unmodified", but the
+  parser only normalised the worktree field (Y). Every unstaged file showed
+  `[✓]`. Both fields are now normalised correctly. ([#3])
+
+- **Commit modal cursor stuck on first visual line**: `find_cursor_in_view`
+  used `cursor_col <= start_col + line_len`, which matched the first wrapped
+  segment for any column from 0 to `max_width`. The cursor never appeared on
+  wrapped lines beyond the first one, and auto-scroll never triggered. Changed
+  to strict `<`.
+
+- **Commit modal word-wrapping collapsed spaces**: the old `wrap_line` did
+  word-based wrapping that collapsed multiple consecutive spaces into one and
+  dropped leading/trailing whitespace. Replaced with `wrap_line_hard` that
+  preserves every character and breaks at `max_width` columns.
+
+- **Commit modal navigation limited to logical lines**: `Up`/`Down` only
+  moved between Shift+Enter-separated logical lines, not between visual
+  wrapped segments. Now uses the wrapped view to navigate one visual line
+  at a time, as expected from a text editor.
+
+- **`Home` / `End` keys not handled in commit modal**: `Home` now jumps
+  to column 0, `End` jumps to the end of the current logical line.
+
 ## [0.2.0] — 2025-06-19
 
 ### Added
