@@ -539,6 +539,13 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
     }
 }
 
+/// Build a wrapped view of the commit message for keyboard navigation.
+/// Extracted so we don't duplicate the import of `commit_modal_editor_width`
+/// inside the hot path.
+fn build_commit_view(s: &AppState) -> Vec<(usize, usize, String, usize)> {
+    crate::ui::modals::build_wrapped_view(&s.commit_message_lines, crate::ui::modals::commit_modal_editor_width())
+}
+
 pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
     let code = key.code;
     let mods = key.modifiers;
@@ -608,6 +615,12 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
                 current_line.push_str(&next_line);
             }
         }
+        KeyCode::Home => {
+            s.commit_cursor_col = 0;
+        }
+        KeyCode::End => {
+            s.commit_cursor_col = s.commit_message_lines[s.commit_cursor_row].len();
+        }
         KeyCode::Left => {
             if s.commit_cursor_col > 0 {
                 s.commit_cursor_col -= 1;
@@ -625,23 +638,70 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
                 s.commit_cursor_col = 0;
             }
         }
+        // Up/Down navigate between visual wrapped lines, not just
+        // logical (Shift+Enter separated) lines. This is what users
+        // expect from a text editor — when a long logical line wraps
+        // to multiple visual rows, pressing ↑ moves up one visual row.
         KeyCode::Up => {
-            if s.commit_cursor_row > 0 {
-                s.commit_cursor_row -= 1;
-                let prev_len = s.commit_message_lines[s.commit_cursor_row].len();
-                if s.commit_cursor_col > prev_len {
-                    s.commit_cursor_col = prev_len;
+            let view = build_commit_view(s);
+            if view.is_empty() {
+                return;
+            }
+            let current_pos = crate::ui::modals::find_cursor_in_view(
+                &view, s.commit_cursor_row, s.commit_cursor_col,
+            );
+            let (wrapped_row, wrapped_col) = current_pos.unwrap_or((0, 0));
+
+            if wrapped_row > 0 {
+                // Move up one visual line, keeping horizontal position.
+                if let Some((row, col)) = crate::ui::modals::wrapped_to_logical(
+                    &view, wrapped_row - 1, wrapped_col,
+                ) {
+                    s.commit_cursor_row = row;
+                    s.commit_cursor_col = col;
                 }
+            } else if s.commit_cursor_row > 0 {
+                // At the first visual line of a non-first logical line:
+                // jump to the end of the previous logical line.
+                s.commit_cursor_row -= 1;
+                s.commit_cursor_col = s.commit_message_lines[s.commit_cursor_row].len();
             }
         }
         KeyCode::Down => {
-            if s.commit_cursor_row + 1 < s.commit_message_lines.len() {
+            let view = build_commit_view(s);
+            if view.is_empty() {
+                return;
+            }
+            let current_pos = crate::ui::modals::find_cursor_in_view(
+                &view, s.commit_cursor_row, s.commit_cursor_col,
+            );
+            let (wrapped_row, wrapped_col) = current_pos.unwrap_or((0, 0));
+
+            if wrapped_row + 1 < view.len() {
+                // Move down one visual line, keeping horizontal position.
+                if let Some((row, col)) = crate::ui::modals::wrapped_to_logical(
+                    &view, wrapped_row + 1, wrapped_col,
+                ) {
+                    s.commit_cursor_row = row;
+                    s.commit_cursor_col = col;
+                }
+            } else if s.commit_cursor_row + 1 < s.commit_message_lines.len() {
+                // At the last visual line, but there's a next logical line.
                 s.commit_cursor_row += 1;
                 let next_len = s.commit_message_lines[s.commit_cursor_row].len();
                 if s.commit_cursor_col > next_len {
                     s.commit_cursor_col = next_len;
                 }
             }
+        }
+        // PageUp / PageDown scroll the wrapped view without moving the
+        // input cursor — useful when the message is long enough to need
+        // scrolling past the cursor's own line.
+        KeyCode::PageUp => {
+            s.commit_modal_scroll = s.commit_modal_scroll.saturating_sub(5);
+        }
+        KeyCode::PageDown => {
+            s.commit_modal_scroll = s.commit_modal_scroll.saturating_add(5);
         }
         KeyCode::Char(c) => {
             let current_line = &mut s.commit_message_lines[s.commit_cursor_row];

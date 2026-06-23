@@ -8,10 +8,141 @@ use ratatui::{
     widgets::Paragraph,
     Frame,
 };
-
 use crate::i18n::{translate, trf};
 use crate::theme::get_themes;
 use crate::ui::state::AppState;
+
+/// Hard-wrap a single line of text at `max_width` display columns,
+/// preserving every character (including spaces, multiple consecutive
+/// spaces, leading/trailing spaces, and tabs). The line is simply split
+/// at the character boundary closest to `max_width` — no word-level
+/// re-joining is performed.
+///
+/// Returns the wrapped segments in order, plus the character-offset
+/// within the original line where each segment starts. The caller uses
+/// `start_col` to translate the input cursor position into wrapped
+/// coordinates.
+fn wrap_line_hard(line: &str, max_width: usize) -> Vec<(String, usize)> {
+    if max_width == 0 {
+        return vec![(line.to_string(), 0)];
+    }
+    if line.is_empty() {
+        return vec![(String::new(), 0)];
+    }
+
+    let mut wrapped: Vec<(String, usize)> = Vec::new();
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let segment_start = i;
+        let mut seg = String::new();
+        let mut seg_width: usize = 0;
+
+        while i < chars.len() {
+            let c = chars[i];
+            let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+
+            // If this character would exceed max_width and we already
+            // have content, break here to start a new segment.
+            if seg_width + cw > max_width && !seg.is_empty() {
+                break;
+            }
+
+            seg.push(c);
+            seg_width += cw;
+            i += 1;
+        }
+
+        // Safety: if the segment is still empty (e.g. a zero-width
+        // character or control char), push the character anyway so we
+        // never get stuck in an infinite loop.
+        if seg.is_empty() && i < chars.len() {
+            seg.push(chars[i]);
+            i += 1;
+        }
+
+        wrapped.push((seg, segment_start));
+    }
+
+    if wrapped.is_empty() {
+        wrapped.push((String::new(), 0));
+    }
+
+    wrapped
+}
+
+/// Given a wrapped `view` and target wrapped coordinates, return the
+/// corresponding logical `(row, col)` clamped to valid bounds.
+pub(crate) fn wrapped_to_logical(
+    view: &[(usize, usize, String, usize)],
+    target_wrapped_row: usize,
+    target_wrapped_col: usize,
+) -> Option<(usize, usize)> {
+    let entry = view.get(target_wrapped_row)?;
+    let (input_row, _wrapped_idx, text, start_col) = entry;
+    let line_len = text.chars().count();
+    let col = start_col + target_wrapped_col.min(line_len);
+    Some((*input_row, col))
+}
+
+/// Compute the editor width (in characters) of the commit message modal.
+/// Derived from the fixed modal dimensions in `draw_commit_modal`:
+///   modal width = 70 → inner width = 68 → text_area width = 64 →
+///   max_width = 62
+pub(crate) fn commit_modal_editor_width() -> usize {
+    // Modal dimensions are fixed in draw_commit_modal:
+    //   modal width = 70 → inner width = 68 → text_area width = 64 → max_width = 62
+    62
+}
+
+/// Build a flat "wrapped view" of the full commit message: each entry is
+/// `(input_line_idx, wrapped_idx_within_line, text, start_col_in_input_line)`.
+/// The view is rendered top-to-bottom and scrolled as a single list.
+pub(crate) fn build_wrapped_view(input_lines: &[String], max_width: usize) -> Vec<(usize, usize, String, usize)> {
+    let mut view = Vec::new();
+    for (i, line) in input_lines.iter().enumerate() {
+        let wrapped = wrap_line_hard(line, max_width);
+        for (j, (text, start_col)) in wrapped.into_iter().enumerate() {
+            view.push((i, j, text, start_col));
+        }
+    }
+    view
+}
+
+/// Translate the input cursor `(row, col)` into wrapped-view coordinates
+/// `(wrapped_row, wrapped_col)`. Returns `None` if the cursor is on an
+/// input row that has no wrapped representation (should not happen).
+///
+/// Uses strict `<` for the upper bound so a cursor at the boundary between
+/// two wrapped segments (e.g. position 10 when segment 1 ends at 10 and
+/// segment 2 starts at 10) correctly snaps to the *next* segment rather
+/// than remaining stuck on the first one. Without this fix the cursor
+/// always appears on the first visual line for any position from 0 to
+/// `max_width`, making it impossible to see where you are typing once
+/// the text wraps past the first visual line.
+pub(crate) fn find_cursor_in_view(
+    view: &[(usize, usize, String, usize)],
+    cursor_row: usize,
+    cursor_col: usize,
+) -> Option<(usize, usize)> {
+    let mut last_in_row: Option<(usize, usize)> = None;
+    for (i, (input_row, _wrapped_idx, text, start_col)) in view.iter().enumerate() {
+        if *input_row != cursor_row {
+            continue;
+        }
+        let line_len = text.chars().count();
+        if cursor_col >= *start_col && cursor_col < start_col + line_len {
+            return Some((i, cursor_col - start_col));
+        }
+        // Keep the last wrapped segment for this input row as a fallback
+        // when the cursor is past the end (e.g. on an empty line just
+        // after a wrap).
+        let clamped_col = if cursor_col >= *start_col { cursor_col - start_col } else { 0 };
+        last_in_row = Some((i, if clamped_col < line_len { clamped_col } else { line_len }));
+    }
+    last_in_row
+}
 
 // ── Solid Border Helper ───────────────────────────────────────────
 
@@ -569,20 +700,16 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(f, modal, " 📝 Commit Message ", s.theme.surface, s.theme.accent);
 
-    let max_lines = inner.height.saturating_sub(2) as usize;
-    if s.commit_cursor_row >= s.commit_modal_scroll + max_lines {
-        s.commit_modal_scroll = s.commit_cursor_row - max_lines + 1;
-    } else if s.commit_cursor_row < s.commit_modal_scroll {
-        s.commit_modal_scroll = s.commit_cursor_row;
-    }
-
+    // Reserve the last row for the help line.
     let text_area = Rect {
         x: inner.x + 2,
         y: inner.y + 1,
         width: inner.width - 4,
-        height: inner.height - 2,
+        height: inner.height.saturating_sub(2),
     };
-    
+
+    // Clear the text area with the modal's surface color so unwrapped rows
+    // don't leak background through.
     for row in text_area.y..text_area.y + text_area.height {
         f.render_widget(
             Paragraph::new(" ".repeat(text_area.width as usize))
@@ -591,39 +718,69 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
         );
     }
 
-    let visible_lines: Vec<String> = s.commit_message_lines
+    // Build the wrapped view of the whole message. `max_width` is the
+    // number of display columns we have inside the text area after the
+    // 1-column padding on each side.
+    let max_width = text_area.width.saturating_sub(2).max(1) as usize;
+    let view = build_wrapped_view(&s.commit_message_lines, max_width);
+    let visible_h = text_area.height as usize;
+
+    // Translate the input cursor to wrapped coordinates, then auto-scroll
+    // so the cursor stays inside the visible window.
+    let cursor_pos = find_cursor_in_view(&view, s.commit_cursor_row, s.commit_cursor_col);
+    let cursor_wrapped_row = cursor_pos.map(|(r, _)| r).unwrap_or(0);
+
+    if cursor_wrapped_row >= s.commit_modal_scroll + visible_h {
+        s.commit_modal_scroll = cursor_wrapped_row + 1 - visible_h;
+    } else if cursor_wrapped_row < s.commit_modal_scroll {
+        s.commit_modal_scroll = cursor_wrapped_row;
+    }
+    // Clamp scroll to the last valid position so we don't show empty
+    // rows below the message.
+    let max_scroll = view.len().saturating_sub(visible_h);
+    if s.commit_modal_scroll > max_scroll {
+        s.commit_modal_scroll = max_scroll;
+    }
+
+    // Render the visible slice of the wrapped view.
+    for (vis_row, (_input_row, _wrapped_idx, text, _start_col)) in view
         .iter()
         .skip(s.commit_modal_scroll)
-        .take(max_lines)
-        .cloned()
-        .collect();
-
-    for (i, line) in visible_lines.iter().enumerate() {
+        .take(visible_h)
+        .enumerate()
+    {
         f.render_widget(
-            Paragraph::new(line.clone())
+            Paragraph::new(text.clone())
                 .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
             Rect {
                 x: text_area.x + 1,
-                y: text_area.y + i as u16,
-                width: text_area.width - 2,
+                y: text_area.y + vis_row as u16,
+                width: text_area.width.saturating_sub(2),
                 height: 1,
             },
         );
     }
 
-    let relative_row = s.commit_cursor_row.saturating_sub(s.commit_modal_scroll);
-    if relative_row < max_lines {
-        let cx = text_area.x + 1 + s.commit_cursor_col as u16;
-        let cy = text_area.y + relative_row as u16;
-        if cx < text_area.x + text_area.width - 1 {
-            f.render_widget(
-                Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
-                Rect { x: cx, y: cy, width: 1, height: 1 },
-            );
+    // Render the cursor at its wrapped position.
+    if let Some((wrapped_row, wrapped_col)) = cursor_pos {
+        let visual_row = wrapped_row.saturating_sub(s.commit_modal_scroll);
+        if visual_row < visible_h {
+            let cx = text_area.x + 1 + wrapped_col.min(max_width) as u16;
+            let cy = text_area.y + visual_row as u16;
+            // Allow the cursor to render at the very last character
+            // position (right edge of content). Without this, the
+            // cursor disappears when the user types exactly to the
+            // end of a wrapped line segment.
+            if cx <= text_area.x + text_area.width.saturating_sub(1) {
+                f.render_widget(
+                    Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
+                    Rect { x: cx, y: cy, width: 1, height: 1 },
+                );
+            }
         }
     }
 
-    let help = "Shift+Enter: New line | Y / Enter: Confirm | Esc: Cancel";
+    let help = "Shift+Enter: New line | PgUp/PgDn: Scroll | Y / Enter: Confirm | Esc: Cancel";
     f.render_widget(
         Paragraph::new(help).alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),

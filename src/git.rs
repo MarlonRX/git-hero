@@ -539,11 +539,12 @@ fn parse_v2_changed(snap: &mut StatusSnapshot, rest: &str) {
         return;
     }
     let bytes = rest.as_bytes();
-    let x = bytes[0] as char;
-    // In porcelain v2 the Y field uses `.` to mean "no worktree change";
-    // normalise to a space so the rest of the codebase (and existing UI
-    // code that matches on `f.status == "M"`) keeps working unchanged.
-    let y = normalise_y(bytes[1] as char);
+    // In porcelain v2 both X (index) and Y (worktree) use `.` to mean
+    // "no change". Normalise to space so `FileSnapshot::staged()` and
+    // `::status()` work correctly — otherwise `.` passes the
+    // `xy[0] != ' '` check and every unstaged file appears staged.
+    let x = normalise_v2_status(bytes[0] as char);
+    let y = normalise_v2_status(bytes[1] as char);
     if let Some(path) = rest.split_whitespace().nth(7) {
         snap.files.push(FileSnapshot {
             path: path.to_string(),
@@ -557,8 +558,8 @@ fn parse_v2_renamed(snap: &mut StatusSnapshot, rest: &str) {
         return;
     }
     let bytes = rest.as_bytes();
-    let x = bytes[0] as char;
-    let y = normalise_y(bytes[1] as char);
+    let x = normalise_v2_status(bytes[0] as char);
+    let y = normalise_v2_status(bytes[1] as char);
     // The 9th whitespace-separated token is `<path>\t<origPath>`. Take only
     // the part before the tab — the new path is what we show in the UI.
     if let Some(field) = rest.split_whitespace().nth(8) {
@@ -575,8 +576,8 @@ fn parse_v2_unmerged(snap: &mut StatusSnapshot, rest: &str) {
         return;
     }
     let bytes = rest.as_bytes();
-    let x = bytes[0] as char;
-    let y = normalise_y(bytes[1] as char);
+    let x = normalise_v2_status(bytes[0] as char);
+    let y = normalise_v2_status(bytes[1] as char);
     if let Some(path) = rest.split_whitespace().nth(9) {
         snap.files.push(FileSnapshot {
             path: path.to_string(),
@@ -585,11 +586,16 @@ fn parse_v2_unmerged(snap: &mut StatusSnapshot, rest: &str) {
     }
 }
 
-/// Translate the v2 `Y='.'` shorthand for "no worktree change" to a space,
-/// matching v1 porcelain and the existing UI matchers.
+/// Translate the v2 `'.'` shorthand for "no change" to a space, matching
+/// v1 porcelain and the existing UI matchers (`staged()`, `worktree()`,
+/// and `status()` all compare against `' '` and `'?'`).
+///
+/// In porcelain v2, both the X (index) and Y (worktree) fields use `.` to
+/// mean "unmodified". This function normalises either field so the
+/// rest of the codebase keeps working unchanged.
 #[inline]
-fn normalise_y(y: char) -> char {
-    if y == '.' { ' ' } else { y }
+fn normalise_v2_status(c: char) -> char {
+    if c == '.' { ' ' } else { c }
 }
 
 // ── Log snapshot ───────────────────────────────────────────────────
