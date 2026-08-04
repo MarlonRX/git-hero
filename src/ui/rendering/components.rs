@@ -229,32 +229,22 @@ pub const GIT_HERO_ASCII: &[&str] = &[
     "  ╚═════╝ ╚═╝    ╚═╝        ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ",
 ];
 
-pub const GIT_HERO_TAGLINE: &str = "Your terminal git companion";
-pub const GIT_HERO_CREDIT: &str = "developed by abvilabs";
+/// Calculates the layout using a logical UI scale. This cannot change the
+/// terminal's real font, but lets users choose a more compact or spacious UI.
+pub fn calculate_layout_scaled(area: Rect) -> (Rect, Rect) {
+    // Fill 98% of the terminal for maximum space usage.
+    let base_width = ((area.width as u32 * 98) / 100) as u16;
+    let outer_width = base_width.min(area.width).max(40.min(area.width));
 
-/// Calculates the responsive layout boundaries (outer, inner) for the main application box.
-pub fn calculate_layout(area: Rect) -> (Rect, Rect) {
-    let show_banner = area.height >= 26 && area.width >= 75;
-    let banner_reserve: u16 = if show_banner { 11 } else { 0 };
-
-    let outer_width = if show_banner {
-        (area.width as f32 * 0.90) as u16
-    } else {
-        (area.width as f32 * 0.96) as u16
-    }.max(40);
-
-    let outer_height = if show_banner {
-        area.height.saturating_sub(banner_reserve + 1)
-    } else {
-        area.height.saturating_sub(1)
-    }.max(10);
+    let base_height = ((area.height as u32 * 98) / 100) as u16;
+    let outer_height = base_height.min(area.height).max(10.min(area.height));
 
     // Make sure we never overflow the area height
-    let outer_height = outer_height.min(area.height.saturating_sub(banner_reserve + 1).max(10));
+    let outer_height = outer_height.min(area.height.max(10));
 
     let outer = Rect {
         x: area.x + (area.width.saturating_sub(outer_width)) / 2,
-        y: area.y + banner_reserve + (area.height.saturating_sub(banner_reserve + outer_height)) / 2,
+        y: area.y + (area.height.saturating_sub(outer_height)) / 2,
         width: outer_width,
         height: outer_height,
     };

@@ -8,7 +8,7 @@ use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 use crate::ui::state::AppState;
 use keyboard::*;
 use mouse::*;
-use crate::ui::rendering::components::calculate_layout;
+use crate::ui::rendering::components::calculate_layout_scaled;
 
 /// Returns false if the app should quit
 pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
@@ -98,6 +98,7 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
+
     // ── Init Wizard ──────────────────────────────────────────────
     if s.init_wizard_active {
         handle_init_wizard_key(code, s);
@@ -127,7 +128,7 @@ pub fn handle_mouse_click(
 ) {
     let size = terminal.size().unwrap_or_default();
     let area = Rect { x: 0, y: 0, width: size.width, height: size.height };
-    let (_outer, inner) = calculate_layout(area);
+    let (_outer, inner) = calculate_layout_scaled(area);
 
     // Close input
     if s.show_input {
@@ -171,7 +172,7 @@ pub fn handle_mouse_scroll(
 ) {
     let size = terminal.size().unwrap_or_default();
     let area = Rect { x: 0, y: 0, width: size.width, height: size.height };
-    let (_outer, inner) = calculate_layout(area);
+    let (_outer, inner) = calculate_layout_scaled(area);
 
     // Don't scroll if modals are open
     if s.show_theme_modal || s.show_help_modal || s.show_docs_modal || s.setup_step > 0 || s.init_wizard_active {

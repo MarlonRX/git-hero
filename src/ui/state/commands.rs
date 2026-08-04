@@ -233,6 +233,7 @@ impl AppState {
         }
     }
 
+
     // ── /stage-all / /unstage-all / /undo-commit / /remove-repo ─
 
     fn cmd_stage_all(&mut self) {

@@ -7,22 +7,7 @@ use ratatui::{
 };
 
 use crate::ui::state::{AppState, GitCommit};
-use super::components::{draw_solid_border, draw_solid_hline, draw_continuous_border, soften, short_path};
-
-/// Phase 4.10: keyboard shortcuts shown at the bottom of the sidebar.
-/// Static slice — zero allocations for the strings themselves. Each
-/// render wraps them in styled `Span`s using the current theme.
-const SHORTCUT_LINES: &[&str] = &[
-    " a Stage all  u Unstage all",
-    " c Commit     r Undo commit",
-    " p Push       f Fetch",
-    " l Pull       s Stash",
-    " d Stash pop  n New branch",
-    " b Branches   o Remote",
-    " t Theme      Spc Stage",
-    " Enter Detail y Copy diff",
-    " Scroll: PgUp/PgDn or Mouse  ? Help q Quit",
-];
+use super::components::{draw_solid_border, draw_continuous_border, soften, short_path};
 
 pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
     f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
@@ -188,62 +173,14 @@ fn wizard_content(s: &AppState) -> (String, Vec<String>) {
 pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
 
-    let header_h: u16 = 2;
-
-    let header_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(20),
-            Constraint::Min(10),
-            Constraint::Length(25),
-        ])
-        .split(Rect { x: body.x + 1, y: body.y, width: body.width.saturating_sub(2), height: 1 });
-
-    let branch_text = format!("{} {}", s.get_icon_str("branch"), s.branch);
-    f.render_widget(
-        Paragraph::new(branch_text)
-            .style(Style::default().fg(s.theme.primary).bg(s.theme.background).add_modifier(Modifier::BOLD)),
-        header_layout[0],
-    );
-
-    let mut dir = s.cwd.clone();
-    if let Some(home) = dirs::home_dir() {
-        let home_str = home.to_string_lossy().to_string();
-        if dir.starts_with(&home_str) {
-            dir = dir.replacen(&home_str, "~", 1);
-        }
-    }
-    let path_max_w = (header_layout[1].width as usize).saturating_sub(5);
-    if dir.len() > path_max_w && path_max_w > 5 {
-        dir = format!("...{}", &dir[dir.len().saturating_sub(path_max_w - 3)..]);
-    }
-    f.render_widget(
-        Paragraph::new(format!("{} {}", s.get_icon_str("dir"), dir))
-            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
-        header_layout[1],
-    );
-
-    let remote_text = format!("{} {}", s.get_icon_str("fetch"), s.remote);
-    f.render_widget(
-        Paragraph::new(remote_text)
-            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
-        header_layout[2],
-    );
-
-    draw_solid_hline(f, body.x, body.y + 1, body.width, s.theme.border);
-
     if body.width < 50 {
-        draw_compact(f, s, body, header_h);
+        draw_compact(f, s, body, 0);
         return;
     }
 
-    let content = Rect {
-        x: body.x,
-        y: body.y + header_h,
-        width: body.width,
-        height: body.height.saturating_sub(header_h),
-    };
+    let content = body;
 
+    // Sidebar: FILES only, takes full height
     let sidebar_w = (content.width / 4).max(20);
     let main = Layout::default()
         .direction(Direction::Horizontal)
@@ -253,46 +190,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     let sidebar = main[0];
     let right = main[1];
 
-    let side_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(3), Constraint::Length(9)])
-        .split(sidebar);
-
-    let info_area = side_chunks[0];
-    draw_continuous_border(
-        f,
-        info_area,
-        " STATUS ",
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD),
-        s.theme.border,
-        s.theme.background,
-        BorderType::Plain,
-    );
-    let info_inner = Rect {
-        x: info_area.x + 1,
-        y: info_area.y + 1,
-        width: info_area.width.saturating_sub(2),
-        height: info_area.height.saturating_sub(2),
-    };
-
-    let behind_s = if s.behind > 0 { s.theme.warning } else { s.theme.dimmed };
-    let ahead_s = if s.ahead > 0 { s.theme.success } else { s.theme.dimmed };
-
-    f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled(
-                format!("{} Behind: {} commits", s.get_icon_str("commit"), s.behind),
-                Style::default().fg(behind_s).bg(s.theme.background),
-            )),
-            Line::from(Span::styled(
-                format!("{} Ahead:  {} commits", s.get_icon_str("commit"), s.ahead),
-                Style::default().fg(ahead_s).bg(s.theme.background),
-            )),
-        ]),
-        info_inner,
-    );
-
-    let files_area = side_chunks[1];
+    let files_area = sidebar;
     let files_title = format!(" FILES ({}) ", s.files.len());
     let border_color = if s.focus_pane == "files" { s.theme.primary } else { s.theme.border };
     let title_style = if s.focus_pane == "files" {
@@ -408,37 +306,11 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         f.render_widget(List::new(all_items).style(Style::default().bg(s.theme.background)), files_inner);
     }
 
-    let shortcuts_area = side_chunks[2];
-    draw_continuous_border(
-        f,
-        shortcuts_area,
-        " ⌨ SHORTCUTS ",
-        Style::default().fg(s.theme.accent).add_modifier(Modifier::BOLD),
-        s.theme.border,
-        s.theme.background,
-        BorderType::Plain,
-    );
-    let shortcuts_inner = Rect {
-        x: shortcuts_area.x + 1,
-        y: shortcuts_area.y + 1,
-        width: shortcuts_area.width.saturating_sub(2),
-        height: shortcuts_area.height.saturating_sub(2),
-    };
-
-    // Phase 4.10: shortcut labels live in a `static` slice. The styled
-    // `Line`/`Span` is built per-frame (so the theme can change at
-    // runtime) but the strings themselves are zero-allocation.
-    let style = Style::default().fg(s.theme.dimmed).bg(s.theme.background);
-    let lines: Vec<Line> = SHORTCUT_LINES
-        .iter()
-        .map(|text| Line::from(Span::styled(*text, style)))
-        .collect();
-    f.render_widget(Paragraph::new(lines).style(Style::default().bg(s.theme.background)), shortcuts_inner);
-
+    // ── Right panel: DIFF + COMMITS ────────────────────────────────
     let right_constraints: Vec<Constraint> = if s.focus_pane == "commits" {
-        vec![Constraint::Percentage(40), Constraint::Percentage(60)]
+        vec![Constraint::Percentage(50), Constraint::Percentage(50)]
     } else {
-        vec![Constraint::Percentage(80), Constraint::Percentage(20)]
+        vec![Constraint::Percentage(70), Constraint::Percentage(30)]
     };
     let right_chunks = Layout::default()
         .direction(Direction::Vertical)
