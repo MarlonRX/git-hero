@@ -721,7 +721,9 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
 /// closed (e.g. pbcopy not installed, broken xclip). Reporting the error is
 /// strictly better than crashing the TUI.
 fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     use std::io::Write;
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     use std::process::{Command, Stdio};
 
     #[cfg(target_os = "macos")]
@@ -747,20 +749,24 @@ fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
         ));
     }
 
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     let mut child = cmd.spawn()?;
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin.write_all(text.as_bytes())?;
-    } else {
-        return Err(std::io::Error::other(
-            "clipboard helper closed its stdin before we could write",
-        ));
-    }
-    let status = child.wait()?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!(
-            "clipboard helper exited with {status}"
-        )))
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin.write_all(text.as_bytes())?;
+        } else {
+            return Err(std::io::Error::other(
+                "clipboard helper closed its stdin before we could write",
+            ));
+        }
+        let status = child.wait()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other(format!(
+                "clipboard helper exited with {status}"
+            )))
+        }
     }
 }
