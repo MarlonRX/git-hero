@@ -45,7 +45,8 @@ Write-Step "->" "Trying to download prebuilt binary..."
 try {
     # Get latest release version from GitHub API
     $releaseUrl = "https://api.github.com/repos/$REPO/releases/latest"
-    $release = Invoke-RestMethod -Uri $releaseUrl -UseBasicParsing
+    $headers = @{ "Accept" = "application/vnd.github.v3+json" }
+    $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -UseBasicParsing
     $version = $release.tag_name -replace '^v', ''
 
     # Find the Windows zip asset
@@ -89,6 +90,7 @@ if (-not $installed) {
         Write-Step "->" "Installing via cargo..."
         $cargoRoot = Join-Path $env:USERPROFILE ".local"
         try {
+            $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
             & cargo install $BINARY --root $cargoRoot 2>$null
             if ($LASTEXITCODE -eq 0) {
                 $cargoExe = Join-Path $cargoRoot "bin\$BINARY.exe"
@@ -124,7 +126,9 @@ if (-not $installed) {
 
     $BUILD_DIR = Join-Path $env:TEMP "git-hero-build-$([System.IO.Path]::GetRandomFileName())"
     Write-Step "->" "Cloning repository..."
-    & git clone --depth 1 "https://github.com/$REPO.git" (Join-Path $BUILD_DIR $BINARY) 2>$null
+
+    # Redirect stderr to stdout to avoid PowerShell treating it as an error
+    $output = & git clone --depth 1 "https://github.com/$REPO.git" (Join-Path $BUILD_DIR $BINARY) 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Clone failed"
         if (Test-Path $BUILD_DIR) { Remove-Item -Recurse -Force $BUILD_DIR }
@@ -134,7 +138,7 @@ if (-not $installed) {
     Write-Step "->" "Building from source - this may take a few minutes..."
     $projectDir = Join-Path $BUILD_DIR $BINARY
     Push-Location $projectDir
-    & cargo build --release 2>$null
+    $output = & cargo build --release 2>&1
     $BUILD_EXIT = $LASTEXITCODE
     Pop-Location
 
