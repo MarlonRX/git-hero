@@ -466,8 +466,8 @@ pub fn handle_update_modal_key(code: KeyCode, s: &mut AppState) {
             let _ = std::process::Command::new("open").arg(url).spawn();
             #[cfg(target_os = "linux")]
             let _ = std::process::Command::new("xdg-open").arg(url).spawn();
-            #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-            let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+            #[cfg(target_os = "windows")]
+            let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
             s.status_message = format!("Opening {} ...", url);
         }
         KeyCode::Char('2') | KeyCode::Char('n') | KeyCode::Char('N') => {

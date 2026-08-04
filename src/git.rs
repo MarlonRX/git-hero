@@ -653,18 +653,28 @@ fn parse_log_nul(text: &str) -> Vec<LogEntry> {
 /// Uses `git ls-remote --tags` to fetch the tag list, then parses the
 /// most recent semver tag (e.g. `v0.2.0`).
 pub fn check_latest_version() -> Result<String, crate::git_error::GitError> {
-    let output = run_git(&[
+    // Try git ls-remote first (works when git is in PATH)
+    if let Ok(output) = run_git(&[
         "ls-remote",
         "--tags",
         "https://github.com/MarlonRX/git-hero",
-    ])?;
+    ]) {
+        if let Some(version) = parse_version_from_ls_remote(&output) {
+            return Ok(version);
+        }
+    }
 
-    let latest = output
+    // Fallback: use HTTP to query GitHub API (works without git in PATH)
+    check_latest_version_http()
+}
+
+/// Parse version tags from `git ls-remote` output.
+fn parse_version_from_ls_remote(output: &str) -> Option<String> {
+    output
         .lines()
         .filter_map(|line| {
             let tag = line.split("refs/tags/").nth(1)?.trim();
             let version = tag.strip_prefix('v').unwrap_or(tag);
-            // Must be valid semver (x.y.z) with all digits.
             if version.split('.').count() == 3
                 && version.chars().all(|c| c == '.' || c.is_ascii_digit())
             {
@@ -677,11 +687,60 @@ pub fn check_latest_version() -> Result<String, crate::git_error::GitError> {
             let va = crate::version::Version::parse(a).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
             let vb = crate::version::Version::parse(b).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
             va.cmp(&vb)
-        });
+        })
+}
 
-    latest.ok_or_else(|| {
-        crate::git_error::GitError::Other("no version tags found".into())
-    })
+/// Check latest version using GitHub API via HTTP.
+fn check_latest_version_http() -> Result<String, crate::git_error::GitError> {
+    let url = "https://api.github.com/repos/MarlonRX/git-hero/releases/latest";
+
+    #[cfg(target_os = "windows")]
+    {
+        // Use PowerShell on Windows
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", &format!(
+                "(Invoke-RestMethod -Uri '{}' -UseBasicParsing).tag_name -replace '^v',''",
+                url
+            )])
+            .output()
+            .map_err(|e| crate::git_error::GitError::Other(format!("failed to run powershell: {e}")))?;
+
+        if output.status.success() {
+            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !version.is_empty() && crate::version::Version::parse(&version).is_some() {
+                return Ok(version);
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Use curl on Linux/macOS
+        let output = Command::new("curl")
+            .args(["-s", "--max-time", "5", url])
+            .output()
+            .map_err(|e| crate::git_error::GitError::Other(format!("failed to run curl: {e}")))?;
+
+        if output.status.success() {
+            let body = String::from_utf8_lossy(&output.stdout);
+            // Simple JSON parsing: find "tag_name":"vX.Y.Z"
+            if let Some(start) = body.find("\"tag_name\"") {
+                let slice = &body[start..];
+                if let Some(q1) = slice.find('"', slice.find(':').unwrap_or(0)) {
+                    let slice = &slice[q1 + 1..];
+                    if let Some(q2) = slice.find('"') {
+                        let tag = &slice[..q2];
+                        let version = tag.strip_prefix('v').unwrap_or(tag).to_string();
+                        if crate::version::Version::parse(&version).is_some() {
+                            return Ok(version);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err(crate::git_error::GitError::Other("could not check for updates".into()))
 }
 
 // ── Tests ──────────────────────────────────────────────────────────
