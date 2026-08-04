@@ -7,7 +7,9 @@
 # Or download and run manually:
 #   .\install.ps1
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
+# Suppress PowerShell errors from native command stderr output (git, cargo)
+$ProgressPreference = "SilentlyContinue"
 
 $BINARY = "gith"
 $REPO = "MarlonRX/git-hero"
