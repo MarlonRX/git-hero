@@ -67,19 +67,15 @@ jobs:
         if: matrix.archive == 'zip'
         shell: bash
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          DIR="gith-${VERSION}-${{ matrix.target }}"
-          mkdir -p "${DIR}"
-          cp target/${{ matrix.target }}/release/gith.exe "${DIR}/"
-          cp README.md LICENSE "${DIR}/" 2>/dev/null || true
-          7z a "${DIR}.zip" "${DIR}"
+          7z a "gith-${{ github.ref_name }}-windows-x86_64.zip" target/${{ matrix.target }}/release/gith.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: gith-${{ matrix.target }}
-          path: gith-*.tar.gz
-          if-no-files-found: gith-*.zip
+          path: |
+            gith-*.tar.gz
+            gith-*.zip
 
   release:
     name: Create Release
@@ -98,6 +94,7 @@ jobs:
         run: |
           cd artifacts
           sha256sum gith-*.tar.gz gith-*.zip > checksums.txt 2>/dev/null || true
+          cat checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -106,7 +103,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            artifacts/gith-*.tar.gz
-            artifacts/gith-*.zip
-            artifacts/checksums.txt
+          files: artifacts/gith-*

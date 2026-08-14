@@ -2,8 +2,9 @@
 # ── Git Hero Installer (gith binary) ────────────────────────────────
 # Minimal POSIX-compatible install script.
 #
-# Strategy: try cargo install first (fast), fall back to build from
-# source (always works). Removes old `git-hero` binary if present.
+# Strategy: download prebuilt binary first (fastest), fall back to
+# cargo install, then build from source. Removes old `git-hero`
+# binary if present.
 
 set -u
 
@@ -33,24 +34,122 @@ info "Git Hero installer"
 printf "  ${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 echo ""
 
+# ── Detect platform ─────────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "${OS}" in
+    Linux)  PLATFORM="linux" ;;
+    Darwin) PLATFORM="macos" ;;
+    *)      PLATFORM="unknown" ;;
+esac
+
+case "${ARCH}" in
+    x86_64|amd64)  ARCH_NAME="x86_64" ;;
+    arm64|aarch64) ARCH_NAME="aarch64" ;;
+    *)             ARCH_NAME="${ARCH}" ;;
+esac
+
+step "➜" "Detected: ${PLATFORM} ${ARCH_NAME}"
+
 # ── Migrate old git-hero binary ──────────────────────────────────────
 if [ -x "${INSTALL_DIR}/${OLD_BINARY}" ]; then
     warn "Removing old '${OLD_BINARY}' binary..."
     rm -f "${INSTALL_DIR}/${OLD_BINARY}"
 fi
 
-# ── 1. Install via cargo ────────────────────────────────────────────
-if have_cmd cargo; then
-    step "➜" "Installing via cargo..."
-    if cargo install "${BINARY}" --root "${HOME}/.local" 2>/dev/null; then
-        ok "done"
-        INSTALLED=1
+mkdir -p "${INSTALL_DIR}"
+
+# ── 1. Download prebuilt binary from GitHub Releases ────────────────
+INSTALLED=""
+step "➜" "Trying to download prebuilt binary..."
+
+# Detect download tool
+DOWNLOADER=""
+if have_cmd curl; then
+    DOWNLOADER="curl"
+elif have_cmd wget; then
+    DOWNLOADER="wget"
+fi
+
+if [ -n "${DOWNLOADER}" ]; then
+    # Get latest release version from GitHub API
+    RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
+    if [ "${DOWNLOADER}" = "curl" ]; then
+        RELEASE_JSON=$(curl -s --max-time 10 "${RELEASE_URL}" 2>/dev/null)
     else
-        warn "not published on crates.io — building from source"
+        RELEASE_JSON=$(wget -q -O - --timeout=10 "${RELEASE_URL}" 2>/dev/null)
+    fi
+
+    # Extract tag_name from JSON (minimal parsing, no jq needed)
+    LATEST_TAG=$(printf '%s' "${RELEASE_JSON}" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+
+    if [ -n "${LATEST_TAG}" ]; then
+        LATEST_VERSION=$(printf '%s' "${LATEST_TAG}" | sed 's/^v//')
+
+        # Build asset filename
+        if [ "${PLATFORM}" = "macos" ]; then
+            ASSET_NAME="gith-${LATEST_VERSION}-${PLATFORM}-${ARCH_NAME}.tar.gz"
+        else
+            ASSET_NAME="gith-${LATEST_VERSION}-${PLATFORM}-${ARCH_NAME}.tar.gz"
+        fi
+        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${ASSET_NAME}"
+
+        step "➜" "Downloading ${ASSET_NAME}..."
+        TEMP_DIR=$(mktemp -d)
+        ARCHIVE="${TEMP_DIR}/${ASSET_NAME}"
+
+        if [ "${DOWNLOADER}" = "curl" ]; then
+            curl -sL --max-time 60 -o "${ARCHIVE}" "${DOWNLOAD_URL}" 2>/dev/null
+        else
+            wget -q --timeout=60 -O "${ARCHIVE}" "${DOWNLOAD_URL}" 2>/dev/null
+        fi
+
+        # Verify download
+        if [ -s "${ARCHIVE}" ]; then
+            # Extract binary
+            if tar -xzf "${ARCHIVE}" -C "${TEMP_DIR}" 2>/dev/null; then
+                # Find the binary (may be in a subdirectory)
+                FOUND=$(find "${TEMP_DIR}" -name "${BINARY}" -type f | head -1)
+                if [ -n "${FOUND}" ] && [ -x "${FOUND}" ]; then
+                    cp "${FOUND}" "${INSTALL_DIR}/${BINARY}"
+                    chmod +x "${INSTALL_DIR}/${BINARY}"
+                    rm -rf "${TEMP_DIR}"
+                    ok "✔  Downloaded and installed v${LATEST_VERSION}"
+                    INSTALLED=1
+                else
+                    rm -rf "${TEMP_DIR}"
+                    warn "Archive did not contain ${BINARY} binary"
+                fi
+            else
+                rm -rf "${TEMP_DIR}"
+                warn "Failed to extract archive"
+            fi
+        else
+            rm -rf "${TEMP_DIR}"
+            warn "Download failed (asset not found for ${PLATFORM}-${ARCH_NAME})"
+        fi
+    else
+        warn "Could not determine latest version"
+    fi
+else
+    warn "No download tool found (curl/wget)"
+fi
+
+# ── 2. Install via cargo ────────────────────────────────────────────
+if [ -z "${INSTALLED:-}" ]; then
+    if have_cmd cargo; then
+        step "➜" "Installing via cargo..."
+        if cargo install "${BINARY}" --root "${HOME}/.local" 2>/dev/null; then
+            ok "done"
+            INSTALLED=1
+        else
+            warn "not published on crates.io — building from source"
+        fi
     fi
 fi
 
-# ── 2. Build from source ────────────────────────────────────────────
+# ── 3. Build from source ────────────────────────────────────────────
 if [ -z "${INSTALLED:-}" ]; then
     if ! have_cmd cargo; then
         echo ""

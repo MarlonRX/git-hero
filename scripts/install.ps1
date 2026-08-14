@@ -8,7 +8,6 @@
 #   .\install.ps1
 
 $ErrorActionPreference = "Continue"
-# Suppress PowerShell errors from native command stderr output (git, cargo)
 $ProgressPreference = "SilentlyContinue"
 
 $BINARY = "gith"
@@ -45,7 +44,6 @@ $installed = $false
 # ── 1. Try downloading prebuilt binary from GitHub Releases ────────
 Write-Step "->" "Trying to download prebuilt binary..."
 try {
-    # Get latest release version from GitHub API
     $releaseUrl = "https://api.github.com/repos/$REPO/releases/latest"
     $headers = @{ "Accept" = "application/vnd.github.v3+json" }
     $release = Invoke-RestMethod -Uri $releaseUrl -Headers $headers -UseBasicParsing
@@ -61,20 +59,23 @@ try {
         Write-Step "->" "Downloading v$version..."
         Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 
-        # Extract
-        $tempDir = Join-Path $env:TEMP "gith-extract-$([System.IO.Path]::GetRandomFileName())"
-        Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
+        # Extract exe directly from zip
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+        $exeEntry = $zip.Entries | Where-Object { $_.Name -eq "$BINARY.exe" } | Select-Object -First 1
 
-        # Find and copy the exe
-        $srcExe = Get-ChildItem -Path $tempDir -Filter "$BINARY.exe" -Recurse | Select-Object -First 1
-        if ($srcExe) {
-            Copy-Item $srcExe.FullName $dstExe -Force
-            Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+        if ($exeEntry) {
+            $stream = $exeEntry.Open()
+            $fileStream = [System.IO.File]::Create($dstExe)
+            $stream.CopyTo($fileStream)
+            $fileStream.Close()
+            $stream.Close()
+            $zip.Dispose()
             Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
             Write-Ok "OK Downloaded and installed v$version"
             $installed = $true
         } else {
-            Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+            $zip.Dispose()
             Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
             Write-Warn "  Zip did not contain gith.exe"
         }
@@ -128,8 +129,6 @@ if (-not $installed) {
 
     $BUILD_DIR = Join-Path $env:TEMP "git-hero-build-$([System.IO.Path]::GetRandomFileName())"
     Write-Step "->" "Cloning repository..."
-
-    # Redirect stderr to stdout to avoid PowerShell treating it as an error
     $output = & git clone --depth 1 "https://github.com/$REPO.git" (Join-Path $BUILD_DIR $BINARY) 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Clone failed"

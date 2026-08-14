@@ -217,7 +217,7 @@ gith/
 The configuration file is saved at:
 - **Linux**: `~/.config/git-hero/config.json`
 - **macOS**: `~/Library/Application Support/git-hero/config.json`
-- **Windows**: `%LOCALAPPDATA%\git-hero\config.json`
+- **Windows**: `%APPDATA%\git-hero\config.json`
 
 On first launch, a configuration wizard runs where you can choose:
 1. Language (English / Español)
@@ -480,7 +480,7 @@ gith/
 El archivo de configuración se guarda en:
 - **Linux**: `~/.config/git-hero/config.json`
 - **macOS**: `~/Library/Application Support/git-hero/config.json`
-- **Windows**: `%LOCALAPPDATA%\git-hero\config.json`
+- **Windows**: `%APPDATA%\git-hero\config.json`
 
 Al primer inicio se ejecuta un asistente de configuración donde puedes elegir:
 1. Idioma (English / Español)
