@@ -49,10 +49,10 @@ mod tests {
 
     #[test]
     fn round_trip_works() {
-            let _dir = env::temp_dir().join("git-hero-test-config");
-            let _ = fs::create_dir_all(&_dir);
-            // Test serialization round-trip directly instead of via
-            // file I/O to avoid needing to set cwd.
+        let _dir = env::temp_dir().join("git-hero-test-config");
+        let _ = fs::create_dir_all(&_dir);
+        // Test serialization round-trip directly instead of via
+        // file I/O to avoid needing to set cwd.
         let c = Config {
             language: "es".into(),
             nerd_font: true,

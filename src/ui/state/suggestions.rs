@@ -97,13 +97,17 @@ pub fn get_directory_suggestions(input: &str) -> Vec<Cow<'static, str>> {
     if let Ok(entries) = fs::read_dir(search_dir) {
         for entry in entries.flatten() {
             // Skip non-directories early — we only suggest dirs to `/cd`.
-            let Ok(file_type) = entry.file_type() else { continue };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
             if !file_type.is_dir() {
                 continue;
             }
             let name = entry.file_name();
             let name_bytes = name.as_encoded_bytes();
-            if !prefix.is_empty() && !ascii_starts_with_ignore_case(name_bytes, prefix_lower.as_bytes()) {
+            if !prefix.is_empty()
+                && !ascii_starts_with_ignore_case(name_bytes, prefix_lower.as_bytes())
+            {
                 continue;
             }
             // Rebuild the base path the user has already typed.
@@ -112,9 +116,8 @@ pub fn get_directory_suggestions(input: &str) -> Vec<Cow<'static, str>> {
             } else {
                 path_arg[..path_arg.len() - prefix.len()].to_string()
             };
-            let needs_sep = !base_path.is_empty()
-                && !base_path.ends_with('/')
-                && !base_path.ends_with('\\');
+            let needs_sep =
+                !base_path.is_empty() && !base_path.ends_with('/') && !base_path.ends_with('\\');
             let name_str = name.to_string_lossy();
             let mut suggestion = String::with_capacity(
                 base_path.len() + name_str.len() + 3, // "/cd " + base + "/" + name
@@ -145,9 +148,10 @@ fn ascii_starts_with_ignore_case(haystack: &[u8], needle_lower: &[u8]) -> bool {
     if haystack.len() < needle_lower.len() {
         return false;
     }
-    haystack[..needle_lower.len()].iter().zip(needle_lower).all(|(h, n)| {
-        h.to_ascii_lowercase() == *n
-    })
+    haystack[..needle_lower.len()]
+        .iter()
+        .zip(needle_lower)
+        .all(|(h, n)| h.to_ascii_lowercase() == *n)
 }
 
 #[cfg(test)]

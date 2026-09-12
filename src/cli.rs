@@ -79,12 +79,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", sep);
     println!();
 
-    println!(
-        "{}  🔍 {}{}",
-        BLUE,
-        translate(lang, "status_fetching"),
-        NC
-    );
+    println!("{}  🔍 {}{}", BLUE, translate(lang, "status_fetching"), NC);
     let _ = crate::git::fetch_remote(&remote, &branch);
 
     let behind = crate::git::get_commits_behind(&remote, &branch);
@@ -138,7 +133,12 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
             );
         } else {
             println!();
-            println!("{}  💬 {}{}", BOLD, translate(lang, "commit_message_label"), NC);
+            println!(
+                "{}  💬 {}{}",
+                BOLD,
+                translate(lang, "commit_message_label"),
+                NC
+            );
             print!("  {}→{} ", BLUE, NC);
             let _ = io::stdout().flush();
             let mut commit_msg = String::new();
@@ -204,12 +204,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("{}  ✖  {}{}", RED, trf(lang, "cli_err_pull", &[&e]), NC);
                 return Err(format!("git pull failed: {e}").into());
             }
-            println!(
-                "{}  ✔  {}{}",
-                GREEN,
-                translate(lang, "pull_completed"),
-                NC
-            );
+            println!("{}  ✔  {}{}", GREEN, translate(lang, "pull_completed"), NC);
             let new_ahead = crate::git::get_commits_ahead(&remote, &branch);
             has_unpushed = new_ahead > 0;
         }
@@ -233,12 +228,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("{}  ✖  {}{}", RED, trf(lang, "cli_err_push", &[&e]), NC);
                 return Err(format!("git push failed: {e}").into());
             }
-            println!(
-                "{}  ✔  {}{}",
-                GREEN,
-                translate(lang, "push_completed"),
-                NC
-            );
+            println!("{}  ✔  {}{}", GREEN, translate(lang, "push_completed"), NC);
         } else {
             println!(
                 "{}  📌 {}{}",
@@ -251,7 +241,13 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     println!("{}", sep);
-    println!("{}  ✅  {}{}{}", GREEN, BOLD, translate(lang, "status_success"), NC);
+    println!(
+        "{}  ✅  {}{}{}",
+        GREEN,
+        BOLD,
+        translate(lang, "status_success"),
+        NC
+    );
     println!("{}", sep);
     println!();
 

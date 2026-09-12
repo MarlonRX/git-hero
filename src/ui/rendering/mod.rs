@@ -1,9 +1,9 @@
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Modifier, Style},
     text::Line,
     widgets::{BorderType, Clear, Paragraph},
-    Frame,
 };
 
 pub mod components;
@@ -15,8 +15,8 @@ use crate::version;
 
 pub use components::render_diff_side_by_side;
 use components::{
-    calculate_layout_scaled, draw_continuous_border, draw_solid_border, draw_solid_hline,
-    GIT_HERO_ASCII,
+    GIT_HERO_ASCII, calculate_layout_scaled, draw_continuous_border, draw_solid_border,
+    draw_solid_hline,
 };
 
 /// Top-level entry point. The setup wizard short-circuits everything
@@ -53,7 +53,9 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         f,
         header_area,
         "",
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD),
         s.theme.border,
         s.theme.background,
         BorderType::Plain,
@@ -67,7 +69,13 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
     };
     draw_banner(f, logo_area, s);
     // Status line at the bottom of the bordered container (before bottom border)
-    draw_status_line(f, inner.x + 1, inner.y + 7, inner.width.saturating_sub(2), s);
+    draw_status_line(
+        f,
+        inner.x + 1,
+        inner.y + 7,
+        inner.width.saturating_sub(2),
+        s,
+    );
 
     let footer_h: u16 = 2;
     let body = Rect {
@@ -129,7 +137,12 @@ fn draw_banner(f: &mut Frame, area: Rect, s: &AppState) {
                     .bg(s.theme.background)
                     .add_modifier(Modifier::BOLD),
             ),
-            Rect { x: area.x + 2, y: area.y + i as u16, width, height: 1 },
+            Rect {
+                x: area.x + 2,
+                y: area.y + i as u16,
+                width,
+                height: 1,
+            },
         );
     }
 }
@@ -152,7 +165,10 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
     // honestly distinguishable from shipped binaries.
     left_spans.push(ratatui::text::Span::styled(
         format!(" {} ", version::full()),
-        Style::default().fg(s.theme.background).bg(s.theme.accent).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(s.theme.background)
+            .bg(s.theme.accent)
+            .add_modifier(Modifier::BOLD),
     ));
     left_spans.push(ratatui::text::Span::raw("  "));
 
@@ -163,7 +179,9 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
     ));
     left_spans.push(ratatui::text::Span::styled(
         s.branch.clone(),
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD),
     ));
 
     // Behind / ahead badges
@@ -171,21 +189,32 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
         left_spans.push(ratatui::text::Span::raw("  "));
         left_spans.push(ratatui::text::Span::styled(
             format!(" ↓{} ", s.behind),
-            Style::default().fg(s.theme.background).bg(s.theme.warning).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(s.theme.background)
+                .bg(s.theme.warning)
+                .add_modifier(Modifier::BOLD),
         ));
     }
     if s.ahead > 0 {
         left_spans.push(ratatui::text::Span::raw("  "));
         left_spans.push(ratatui::text::Span::styled(
             format!(" ↑{} ", s.ahead),
-            Style::default().fg(s.theme.background).bg(s.theme.success).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(s.theme.background)
+                .bg(s.theme.success)
+                .add_modifier(Modifier::BOLD),
         ));
     }
 
     let left_line = ratatui::text::Line::from(left_spans);
     f.render_widget(
         Paragraph::new(left_line),
-        Rect { x, y, width, height: 1 },
+        Rect {
+            x,
+            y,
+            width,
+            height: 1,
+        },
     );
 
     // Right side: directory path with icon
@@ -196,7 +225,9 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
         ),
         ratatui::text::Span::styled(
             dir,
-            Style::default().fg(s.theme.foreground).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(s.theme.foreground)
+                .add_modifier(Modifier::ITALIC),
         ),
     ];
     let dir_line = ratatui::text::Line::from(dir_spans);
@@ -204,7 +235,12 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
     if dir_width + 4 < width {
         f.render_widget(
             Paragraph::new(dir_line),
-            Rect { x: x + width - dir_width, y, width: dir_width, height: 1 },
+            Rect {
+                x: x + width - dir_width,
+                y,
+                width: dir_width,
+                height: 1,
+            },
         );
     }
 }
@@ -241,8 +277,7 @@ fn draw_footer(f: &mut Frame, footer: Rect, s: &AppState) {
     let legend = translate(&s.language, "footer_help").into_owned();
     let llen = legend.chars().count() as u16;
     f.render_widget(
-        Paragraph::new(legend)
-            .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Paragraph::new(legend).style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
         Rect {
             x: footer.x + footer.width.saturating_sub(llen + 1),
             y: footer.y + 1,
@@ -256,11 +291,7 @@ fn draw_footer(f: &mut Frame, footer: Rect, s: &AppState) {
 /// open so the user can't accidentally type into the input while
 /// answering a confirmation.
 fn draw_command_bar(f: &mut Frame, outer: Rect, s: &AppState) {
-    if !s.show_input
-        || s.show_theme_modal
-        || s.show_help_modal
-        || s.show_docs_modal
-    {
+    if !s.show_input || s.show_theme_modal || s.show_help_modal || s.show_docs_modal {
         return;
     }
     let iy = outer.y + outer.height - 1;
@@ -295,9 +326,7 @@ fn draw_command_bar(f: &mut Frame, outer: Rect, s: &AppState) {
     let display = if s.input_value.is_empty() {
         ratatui::text::Span::styled(
             translate(&s.language, "input_placeholder").into_owned(),
-            Style::default()
-                .fg(s.theme.dimmed)
-                .bg(s.theme.primary),
+            Style::default().fg(s.theme.dimmed).bg(s.theme.primary),
         )
     } else {
         ratatui::text::Span::styled(
@@ -356,7 +385,11 @@ fn draw_command_bar(f: &mut Frame, outer: Rect, s: &AppState) {
                     .fg(s.theme.foreground)
                     .bg(s.theme.background)
             };
-            let pre = if i == s.active_sug { " \u{25B6} " } else { "   " };
+            let pre = if i == s.active_sug {
+                " \u{25B6} "
+            } else {
+                "   "
+            };
             ratatui::widgets::ListItem::new(format!("{}{}", pre, sug)).style(sty)
         })
         .collect();

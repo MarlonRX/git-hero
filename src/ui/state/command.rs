@@ -217,14 +217,18 @@ impl Command {
 
         // ── Exact-match commands ─────────────────────────────────
         match input {
-            "/cd" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/cd requires a path"),
-            }),
-            "/remote" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/remote requires a URL"),
-            }),
+            "/cd" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/cd requires a path"),
+                });
+            }
+            "/remote" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/remote requires a URL"),
+                });
+            }
             "/commit" => return Ok(Command::Commit),
             "/fetch" => return Ok(Command::Fetch),
             "/pull" => return Ok(Command::Pull),
@@ -237,23 +241,31 @@ impl Command {
             "/undo-commit" => return Ok(Command::UndoCommit),
             "/remove-repo" => return Ok(Command::RemoveRepo),
             "/branch" | "/branches" => return Ok(Command::ListBranches),
-            "/branch -d" | "/branch -s" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/branch -d/-s requires a name"),
-            }),
-            "/switch" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/switch requires a name"),
-            }),
-            "/language" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/language requires 'en' or 'es'"),
-            }),
+            "/branch -d" | "/branch -s" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/branch -d/-s requires a name"),
+                });
+            }
+            "/switch" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/switch requires a name"),
+                });
+            }
+            "/language" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/language requires 'en' or 'es'"),
+                });
+            }
             "/config" => return Ok(Command::ListConfig),
-            "/config-global" => return Err(ParseError {
-                input: input.to_string(),
-                reason: Cow::Borrowed("/config-global requires a key"),
-            }),
+            "/config-global" => {
+                return Err(ParseError {
+                    input: input.to_string(),
+                    reason: Cow::Borrowed("/config-global requires a key"),
+                });
+            }
             "/stash" => return Ok(Command::Stash),
             "/stash-pop" => return Ok(Command::StashPop),
             "/repos" => return Ok(Command::Repos),
@@ -273,7 +285,10 @@ impl Command {
         ("/fetch", "git fetch"),
         ("/pull", "git pull (with confirmation)"),
         ("/push", "git push (with confirmation)"),
-        ("/commit [msg]", "Open modal, or commit immediately with a message"),
+        (
+            "/commit [msg]",
+            "Open modal, or commit immediately with a message",
+        ),
         ("/stage-all", "git add ."),
         ("/unstage-all", "git reset HEAD"),
         ("/undo-commit", "Soft-reset the last commit"),
@@ -283,7 +298,10 @@ impl Command {
         ("/switch <name>", "Switch to (or create) a branch"),
         ("/config <k> [v]", "Read or set local config"),
         ("/config-global <k> [v]", "Read or set global config"),
-        ("/repos", "Repository overview: branch, ahead/behind, dirty count"),
+        (
+            "/repos",
+            "Repository overview: branch, ahead/behind, dirty count",
+        ),
         ("/stash", "git stash"),
         ("/stash-pop", "git stash pop"),
         ("/themes", "Open the theme picker"),
@@ -308,15 +326,11 @@ mod tests {
     use super::*;
 
     fn ok(input: &str) -> Command {
-        Command::parse(input)
-            .unwrap_or_else(|e| panic!("expected ok for {input:?}, got {e}"))
+        Command::parse(input).unwrap_or_else(|e| panic!("expected ok for {input:?}, got {e}"))
     }
 
     fn err(input: &str) {
-        assert!(
-            Command::parse(input).is_err(),
-            "expected err for {input:?}"
-        );
+        assert!(Command::parse(input).is_err(), "expected err for {input:?}");
     }
 
     // ── Sanity ──
@@ -418,7 +432,10 @@ mod tests {
     }
     #[test]
     fn branch_create() {
-        assert_eq!(ok("/branch feature-x"), Command::CreateBranch("feature-x".into()));
+        assert_eq!(
+            ok("/branch feature-x"),
+            Command::CreateBranch("feature-x".into())
+        );
     }
     #[test]
     fn branch_create_with_flag_is_error() {

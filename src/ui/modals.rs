@@ -2,16 +2,16 @@
 // Setup wizard, theme selector, and help overlay
 // Uses solid █ borders (same style as main UI layout)
 
+use crate::i18n::{translate, trf};
+use crate::theme::get_themes;
+use crate::ui::state::AppState;
 use ratatui::{
+    Frame,
     layout::{Alignment, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
-    Frame,
 };
-use crate::i18n::{translate, trf};
-use crate::theme::get_themes;
-use crate::ui::state::AppState;
 
 /// Hard-wrap a single line of text at `max_width` display columns,
 /// preserving every character (including spaces, multiple consecutive
@@ -100,7 +100,10 @@ pub(crate) fn commit_modal_editor_width() -> usize {
 /// Build a flat "wrapped view" of the full commit message: each entry is
 /// `(input_line_idx, wrapped_idx_within_line, text, start_col_in_input_line)`.
 /// The view is rendered top-to-bottom and scrolled as a single list.
-pub(crate) fn build_wrapped_view(input_lines: &[String], max_width: usize) -> Vec<(usize, usize, String, usize)> {
+pub(crate) fn build_wrapped_view(
+    input_lines: &[String],
+    max_width: usize,
+) -> Vec<(usize, usize, String, usize)> {
     let mut view = Vec::new();
     for (i, line) in input_lines.iter().enumerate() {
         let wrapped = wrap_line_hard(line, max_width);
@@ -139,8 +142,19 @@ pub(crate) fn find_cursor_in_view(
         // Keep the last wrapped segment for this input row as a fallback
         // when the cursor is past the end (e.g. on an empty line just
         // after a wrap).
-        let clamped_col = if cursor_col >= *start_col { cursor_col - start_col } else { 0 };
-        last_in_row = Some((i, if clamped_col < line_len { clamped_col } else { line_len }));
+        let clamped_col = if cursor_col >= *start_col {
+            cursor_col - start_col
+        } else {
+            0
+        };
+        last_in_row = Some((
+            i,
+            if clamped_col < line_len {
+                clamped_col
+            } else {
+                line_len
+            },
+        ));
     }
     last_in_row
 }
@@ -160,9 +174,13 @@ fn draw_modal_frame(
     // 1. Fill entire modal area with background first
     for row in modal.y..modal.y + modal.height {
         f.render_widget(
-            Paragraph::new(" ".repeat(modal.width as usize))
-                .style(Style::default().bg(bg)),
-            Rect { x: modal.x, y: row, width: modal.width, height: 1 },
+            Paragraph::new(" ".repeat(modal.width as usize)).style(Style::default().bg(bg)),
+            Rect {
+                x: modal.x,
+                y: row,
+                width: modal.width,
+                height: 1,
+            },
         );
     }
 
@@ -171,18 +189,44 @@ fn draw_modal_frame(
     let top_str = format!("╭{}╮", "─".repeat(modal.width.saturating_sub(2) as usize));
     f.render_widget(
         Paragraph::new(top_str).style(os),
-        Rect { x: modal.x, y: modal.y, width: modal.width, height: 1 },
+        Rect {
+            x: modal.x,
+            y: modal.y,
+            width: modal.width,
+            height: 1,
+        },
     );
     // Bottom: ╰ ─ ... ─ ╯
     let bottom_str = format!("╰{}╯", "─".repeat(modal.width.saturating_sub(2) as usize));
     f.render_widget(
         Paragraph::new(bottom_str).style(os),
-        Rect { x: modal.x, y: modal.y + modal.height - 1, width: modal.width, height: 1 },
+        Rect {
+            x: modal.x,
+            y: modal.y + modal.height - 1,
+            width: modal.width,
+            height: 1,
+        },
     );
     // Sides: │
     for row in (modal.y + 1)..(modal.y + modal.height - 1) {
-        f.render_widget(Paragraph::new("│").style(os), Rect { x: modal.x, y: row, width: 1, height: 1 });
-        f.render_widget(Paragraph::new("│").style(os), Rect { x: modal.x + modal.width - 1, y: row, width: 1, height: 1 });
+        f.render_widget(
+            Paragraph::new("│").style(os),
+            Rect {
+                x: modal.x,
+                y: row,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new("│").style(os),
+            Rect {
+                x: modal.x + modal.width - 1,
+                y: row,
+                width: 1,
+                height: 1,
+            },
+        );
     }
 
     // Inner content area (inside the border)
@@ -238,10 +282,14 @@ fn draw_modal_title(
     let tw = final_title.width() as u16;
     let tx = modal.x + (modal.width.saturating_sub(tw)) / 2;
     f.render_widget(
-        Paragraph::new(final_title).style(
-            Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD),
-        ),
-        Rect { x: tx, y: modal.y, width: tw, height: 1 },
+        Paragraph::new(final_title)
+            .style(Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)),
+        Rect {
+            x: tx,
+            y: modal.y,
+            width: tw,
+            height: 1,
+        },
     );
 }
 
@@ -253,7 +301,12 @@ pub fn draw_setup_wizard(f: &mut Frame, s: &mut AppState) {
     let mh = 14u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
 
@@ -264,14 +317,25 @@ pub fn draw_setup_wizard(f: &mut Frame, s: &mut AppState) {
     f.render_widget(
         Paragraph::new(lines.join("\n"))
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height - 2 },
+        Rect {
+            x: inner.x + 1,
+            y: cy,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let help = translate(&s.language, "setup_help");
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -294,7 +358,10 @@ fn setup_content(s: &AppState) -> (String, Vec<String>) {
             title = " Icons Setup ".to_string();
             lines.push("Select Icon Set:".to_string());
             lines.push(String::new());
-            for (i, o) in ["Nerd Fonts (with icons)", "Standard ASCII (plain text)"].iter().enumerate() {
+            for (i, o) in ["Nerd Fonts (with icons)", "Standard ASCII (plain text)"]
+                .iter()
+                .enumerate()
+            {
                 lines.push(if i == s.setup_cursor {
                     format!(" \u{25B6} {}", o)
                 } else {
@@ -330,10 +397,21 @@ pub fn draw_theme_modal(f: &mut Frame, s: &mut AppState) {
     let mh = (themes.len() as u16 + 6).min(area.height - 2);
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " \u{1F3A8} Select Visual Theme ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " \u{1F3A8} Select Visual Theme ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
     let mut lines = Vec::new();
     lines.push(format!("{}:", translate(&s.language, "theme_title")));
@@ -353,14 +431,25 @@ pub fn draw_theme_modal(f: &mut Frame, s: &mut AppState) {
     f.render_widget(
         Paragraph::new(lines.join("\n"))
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height - 2 },
+        Rect {
+            x: inner.x + 1,
+            y: cy,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let help = translate(&s.language, "theme_help");
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -372,16 +461,28 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 20u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " \u{2753} Keyboard Shortcuts & Commands ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " \u{2753} Keyboard Shortcuts & Commands ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
     // Phase 4.9: single source of truth for the command list. The
     // static table in `Command::HELP` is reused by the CLI's `--help`
     // output too, so adding a new command only requires editing one
     // place.
-    let mut lines: Vec<String> = Vec::with_capacity(crate::ui::state::command::Command::HELP.len() + 4);
+    let mut lines: Vec<String> =
+        Vec::with_capacity(crate::ui::state::command::Command::HELP.len() + 4);
     for (syntax, desc) in crate::ui::state::command::Command::HELP {
         lines.push(format!("  {syntax:<22} {desc}"));
     }
@@ -389,9 +490,13 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
 
     let cy = inner.y + 1;
     f.render_widget(
-        Paragraph::new(body)
-            .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height - 2 },
+        Paragraph::new(body).style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
+        Rect {
+            x: inner.x + 1,
+            y: cy,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let footer = translate(&s.language, "modal_close_keys");
@@ -399,7 +504,12 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
         Paragraph::new(footer)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -452,23 +562,44 @@ pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 22u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " \u{1F4D6} Detailed Shortcut Reference ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " \u{1F4D6} Detailed Shortcut Reference ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
     let cy = inner.y;
     f.render_widget(
         Paragraph::new(DOCS_LINES.join("\n"))
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height },
+        Rect {
+            x: inner.x + 1,
+            y: cy,
+            width: inner.width - 2,
+            height: inner.height,
+        },
     );
 
     f.render_widget(
         Paragraph::new(translate(&s.language, "modal_close_hint").into_owned())
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -480,25 +611,50 @@ pub fn draw_confirm_push_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 8u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " 🚀 Push Confirmation ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " 🚀 Push Confirmation ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
-    let text = format!("Are you sure you want to push to remote?\n\nTarget: {}/{}", s.remote, s.branch);
-    
+    let text = format!(
+        "Are you sure you want to push to remote?\n\nTarget: {}/{}",
+        s.remote, s.branch
+    );
+
     f.render_widget(
         Paragraph::new(text)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y + 1,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let help = "Press [y] / [Enter] to Confirm | [n] / [Esc] to Cancel";
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -510,25 +666,50 @@ pub fn draw_confirm_pull_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 8u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " 📥 Pull Confirmation ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " 📥 Pull Confirmation ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
-    let text = format!("Are you sure you want to pull from remote?\n\nSource: {}/{}", s.remote, s.branch);
-    
+    let text = format!(
+        "Are you sure you want to pull from remote?\n\nSource: {}/{}",
+        s.remote, s.branch
+    );
+
     f.render_widget(
         Paragraph::new(text)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y + 1,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let help = "Press [y] / [Enter] to Confirm | [n] / [Esc] to Cancel";
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -543,7 +724,12 @@ pub fn draw_confirm_remove_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 9u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     // Red border + red title to signal danger.
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.warning);
@@ -559,22 +745,34 @@ pub fn draw_confirm_remove_modal(f: &mut Frame, s: &mut AppState) {
         .map(|p| p.join(".git").to_string_lossy().into_owned())
         .unwrap_or_else(|_| ".git".to_string());
 
-    let text = format!(
-        "This will permanently delete:\n\n  {target}\n\nThis action CANNOT be undone."
-    );
+    let text =
+        format!("This will permanently delete:\n\n  {target}\n\nThis action CANNOT be undone.");
     f.render_widget(
         Paragraph::new(text)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.warning).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: inner.height - 2 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y + 1,
+            width: inner.width - 2,
+            height: inner.height - 2,
+        },
     );
 
     let help = "Press [y] / [Enter] to DELETE  |  [n] / [Esc] to cancel";
     f.render_widget(
-        Paragraph::new(help)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(s.theme.primary).bg(s.theme.surface).add_modifier(Modifier::BOLD)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Paragraph::new(help).alignment(Alignment::Center).style(
+            Style::default()
+                .fg(s.theme.primary)
+                .bg(s.theme.surface)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -591,7 +789,12 @@ pub fn draw_repo_overview(f: &mut Frame, s: &mut AppState) {
     let mh = (rows_wanted + 7).min(area.height.saturating_sub(4)).max(9);
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(
@@ -618,16 +821,28 @@ pub fn draw_repo_overview(f: &mut Frame, s: &mut AppState) {
             Span::styled(
                 summary,
                 Style::default()
-                    .fg(if dirty > 0 { s.theme.warning } else { s.theme.success })
+                    .fg(if dirty > 0 {
+                        s.theme.warning
+                    } else {
+                        s.theme.success
+                    })
                     .bg(s.theme.surface)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                format!("   {}", crate::ui::rendering::components::short_path(&s.repo_scan_root)),
+                format!(
+                    "   {}",
+                    crate::ui::rendering::components::short_path(&s.repo_scan_root)
+                ),
                 Style::default().fg(s.theme.dimmed).bg(s.theme.surface),
             ),
         ])),
-        Rect { x: inner.x + 1, y: inner.y, width: inner.width.saturating_sub(2), height: 1 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y,
+            width: inner.width.saturating_sub(2),
+            height: 1,
+        },
     );
 
     // Rows window around the cursor.
@@ -647,7 +862,12 @@ pub fn draw_repo_overview(f: &mut Frame, s: &mut AppState) {
         .collect();
     f.render_widget(
         Paragraph::new(lines).style(Style::default().bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: list_top, width: inner.width.saturating_sub(2), height: list_h as u16 },
+        Rect {
+            x: inner.x + 1,
+            y: list_top,
+            width: inner.width.saturating_sub(2),
+            height: list_h as u16,
+        },
     );
 
     let help = translate(&s.language, "repo_overview_help");
@@ -655,7 +875,12 @@ pub fn draw_repo_overview(f: &mut Frame, s: &mut AppState) {
         Paragraph::new(help)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -667,11 +892,18 @@ fn repo_overview_row(
 ) -> Line<'static> {
     let selected = idx == s.repo_cursor;
     let base = if selected {
-        Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(s.theme.highlight)
+            .fg(s.theme.on_highlight)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().bg(s.theme.surface).fg(s.theme.foreground)
     };
-    let dim = base.fg(if selected { s.theme.on_highlight } else { s.theme.dimmed });
+    let dim = base.fg(if selected {
+        s.theme.on_highlight
+    } else {
+        s.theme.dimmed
+    });
     let pre = if selected { "\u{25B6} " } else { "  " };
     let age = if e.age.is_empty() {
         // Repo without commits — show the localized "no commits" hint.
@@ -679,10 +911,24 @@ fn repo_overview_row(
     } else {
         e.age.clone()
     };
-    let changes = if e.dirty > 0 { format!("{} \u{2731}", e.dirty) } else { "\u{2713}".to_string() };
+    let changes = if e.dirty > 0 {
+        format!("{} \u{2731}", e.dirty)
+    } else {
+        "\u{2713}".to_string()
+    };
     Line::from(vec![
-        Span::styled(format!("{pre}{:<22}", truncate_one_line(&e.name, 21)), base.add_modifier(Modifier::BOLD)),
-        Span::styled(format!("{:<14}", truncate_one_line(&e.branch, 13)), base.fg(if selected { s.theme.on_highlight } else { s.theme.primary })),
+        Span::styled(
+            format!("{pre}{:<22}", truncate_one_line(&e.name, 21)),
+            base.add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{:<14}", truncate_one_line(&e.branch, 13)),
+            base.fg(if selected {
+                s.theme.on_highlight
+            } else {
+                s.theme.primary
+            }),
+        ),
         Span::styled(format!("\u{2191}{} \u{2193}{} ", e.ahead, e.behind), dim),
         Span::styled(
             format!("{:<8}", changes),
@@ -700,35 +946,60 @@ fn repo_overview_row(
 
 /// Single-line helper used by both overview columns' truncation.
 fn truncate_one_line(text: &str, max: usize) -> String {
-    let flat: String = text.chars().map(|c| if c == '\n' { ' ' } else { c }).take(max).collect();
+    let flat: String = text
+        .chars()
+        .map(|c| if c == '\n' { ' ' } else { c })
+        .take(max)
+        .collect();
     flat
 }
 
 // ── Credentials Input Modal ───────────────────────────────────────
 
-pub fn draw_credentials_modal(f: &mut Frame, s: &mut AppState) {    let area = f.area();
+pub fn draw_credentials_modal(f: &mut Frame, s: &mut AppState) {
+    let area = f.area();
     let mw = 60u16;
     let mh = 10u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " 🔑 Remote Credentials Required ", s.theme.surface, s.theme.primary);
+    draw_modal_title(
+        f,
+        modal,
+        " 🔑 Remote Credentials Required ",
+        s.theme.surface,
+        s.theme.primary,
+    );
 
     let prompt_text = format!("Prompt: {}", s.credentials_prompt);
     f.render_widget(
         Paragraph::new(prompt_text)
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 2, y: inner.y + 1, width: inner.width - 4, height: 2 },
+        Rect {
+            x: inner.x + 2,
+            y: inner.y + 1,
+            width: inner.width - 4,
+            height: 2,
+        },
     );
 
     let input_y = inner.y + 3;
     let input_w = inner.width - 4;
     f.render_widget(
-        Paragraph::new(" ".repeat(input_w as usize))
-            .style(Style::default().bg(s.theme.surface)),
-        Rect { x: inner.x + 2, y: input_y, width: input_w, height: 1 },
+        Paragraph::new(" ".repeat(input_w as usize)).style(Style::default().bg(s.theme.surface)),
+        Rect {
+            x: inner.x + 2,
+            y: input_y,
+            width: input_w,
+            height: 1,
+        },
     );
 
     let displayed_input = if s.credentials_mask {
@@ -739,22 +1010,38 @@ pub fn draw_credentials_modal(f: &mut Frame, s: &mut AppState) {    let area = f
     f.render_widget(
         Paragraph::new(displayed_input)
             .style(Style::default().fg(s.theme.accent).bg(s.theme.surface)),
-        Rect { x: inner.x + 3, y: input_y, width: input_w - 2, height: 1 },
+        Rect {
+            x: inner.x + 3,
+            y: input_y,
+            width: input_w - 2,
+            height: 1,
+        },
     );
 
     let cx = inner.x + 3 + s.credentials_cursor as u16;
     if cx < inner.x + 2 + input_w {
         f.render_widget(
             Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
-            Rect { x: cx, y: input_y, width: 1, height: 1 },
+            Rect {
+                x: cx,
+                y: input_y,
+                width: 1,
+                height: 1,
+            },
         );
     }
 
     let help = "Enter: Submit | Esc: Cancel";
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -768,7 +1055,12 @@ pub fn draw_update_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 12u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(
@@ -782,13 +1074,22 @@ pub fn draw_update_modal(f: &mut Frame, s: &mut AppState) {
     let text = format!(
         "{}\n{}\n",
         trf(&s.language, "update_new_version", &[&s.latest_version]),
-        trf(&s.language, "update_current_version", &[crate::version::PKG_VERSION]),
+        trf(
+            &s.language,
+            "update_current_version",
+            &[crate::version::PKG_VERSION]
+        ),
     );
     f.render_widget(
         Paragraph::new(text)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: inner.y + 1, width: inner.width - 2, height: 3 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y + 1,
+            width: inner.width - 2,
+            height: 3,
+        },
     );
 
     // Three options
@@ -802,7 +1103,12 @@ pub fn draw_update_modal(f: &mut Frame, s: &mut AppState) {
         Paragraph::new(opts_text)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x + 1, y: inner.y + 4, width: inner.width - 2, height: 4 },
+        Rect {
+            x: inner.x + 1,
+            y: inner.y + 4,
+            width: inner.width - 2,
+            height: 4,
+        },
     );
 
     let help = "Press [1] Open download page  |  [2] Later  |  [3] Don't show again";
@@ -810,7 +1116,12 @@ pub fn draw_update_modal(f: &mut Frame, s: &mut AppState) {
         Paragraph::new(help)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.dimmed).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -822,10 +1133,21 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
     let mh = 16u16;
     let mx = (area.width.saturating_sub(mw)) / 2;
     let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect { x: mx, y: my, width: mw, height: mh };
+    let modal = Rect {
+        x: mx,
+        y: my,
+        width: mw,
+        height: mh,
+    };
 
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(f, modal, " 📝 Commit Message ", s.theme.surface, s.theme.accent);
+    draw_modal_title(
+        f,
+        modal,
+        " 📝 Commit Message ",
+        s.theme.surface,
+        s.theme.accent,
+    );
 
     // Reserve the last row for the help line.
     let text_area = Rect {
@@ -841,7 +1163,12 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
         f.render_widget(
             Paragraph::new(" ".repeat(text_area.width as usize))
                 .style(Style::default().bg(s.theme.surface)),
-            Rect { x: text_area.x, y: row, width: text_area.width, height: 1 },
+            Rect {
+                x: text_area.x,
+                y: row,
+                width: text_area.width,
+                height: 1,
+            },
         );
     }
 
@@ -901,7 +1228,12 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
             if cx <= text_area.x + text_area.width.saturating_sub(1) {
                 f.render_widget(
                     Paragraph::new(" ").style(Style::default().bg(s.theme.accent)),
-                    Rect { x: cx, y: cy, width: 1, height: 1 },
+                    Rect {
+                        x: cx,
+                        y: cy,
+                        width: 1,
+                        height: 1,
+                    },
                 );
             }
         }
@@ -909,9 +1241,15 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
 
     let help = "Shift+Enter: New line | PgUp/PgDn: Scroll | Y / Enter: Confirm | Esc: Cancel";
     f.render_widget(
-        Paragraph::new(help).alignment(Alignment::Center)
+        Paragraph::new(help)
+            .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
+        Rect {
+            x: inner.x,
+            y: inner.y + inner.height - 1,
+            width: inner.width,
+            height: 1,
+        },
     );
 }
 
@@ -921,7 +1259,10 @@ mod tests {
     use crate::ui::state::command::Command;
 
     fn docs_line_for(cmd: &str) -> Option<&'static str> {
-        DOCS_LINES.iter().copied().find(|l| l.trim_start().starts_with(cmd))
+        DOCS_LINES
+            .iter()
+            .copied()
+            .find(|l| l.trim_start().starts_with(cmd))
     }
 
     /// Regression for the security issue in the original plan (§1.3.1):
@@ -962,10 +1303,7 @@ mod tests {
         // whose dispatcher arm (cmd_remove_repo) has no git write call.
         // `git_remove_repo` must therefore only be reachable from the
         // confirm-remove keyboard handler.
-        assert_eq!(
-            Command::parse("/remove-repo").unwrap(),
-            Command::RemoveRepo
-        );
+        assert_eq!(Command::parse("/remove-repo").unwrap(), Command::RemoveRepo);
         let src = include_str!("state/commands.rs");
         let remove_fn = src
             .split("fn cmd_remove_repo")

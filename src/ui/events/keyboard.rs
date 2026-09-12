@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::config::{load_config, save_config, Config};
+use crate::config::{Config, load_config, save_config};
 use crate::git;
 use crate::i18n::{translate, trf};
 use crate::theme::{get_theme_by_name, get_themes};
@@ -20,7 +20,11 @@ pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
-            let limit = if s.setup_step == 3 { get_themes().len() } else { 2 };
+            let limit = if s.setup_step == 3 {
+                get_themes().len()
+            } else {
+                2
+            };
             s.setup_cursor = (s.setup_cursor + 1) % limit;
             if s.setup_step == 3 {
                 s.theme = get_themes()[s.setup_cursor];
@@ -28,7 +32,11 @@ pub fn handle_setup_key(code: KeyCode, s: &mut AppState) {
         }
         KeyCode::Enter => match s.setup_step {
             1 => {
-                s.language = if s.setup_cursor == 0 { "en".into() } else { "es".into() };
+                s.language = if s.setup_cursor == 0 {
+                    "en".into()
+                } else {
+                    "es".into()
+                };
                 s.setup_step = 2;
                 s.setup_cursor = 0;
             }
@@ -123,10 +131,14 @@ pub fn handle_init_wizard_key(code: KeyCode, s: &mut AppState) {
                 }
             }
             KeyCode::Left => {
-                if s.input_cursor_pos > 0 { s.input_cursor_pos -= 1; }
+                if s.input_cursor_pos > 0 {
+                    s.input_cursor_pos -= 1;
+                }
             }
             KeyCode::Right => {
-                if s.input_cursor_pos < s.input_value.len() { s.input_cursor_pos += 1; }
+                if s.input_cursor_pos < s.input_value.len() {
+                    s.input_cursor_pos += 1;
+                }
             }
             KeyCode::Char(c) => {
                 s.input_value.insert(s.input_cursor_pos, c);
@@ -160,9 +172,22 @@ pub fn handle_init_wizard_key(code: KeyCode, s: &mut AppState) {
         KeyCode::Enter => {
             if s.init_wizard_step == 1 {
                 match s.init_cursor {
-                    0 => { s.init_branch_name = "main".into(); s.init_wizard_step = 2; s.input_value.clear(); s.input_cursor_pos = 0; }
-                    1 => { s.init_branch_name = "master".into(); s.init_wizard_step = 2; s.input_value.clear(); s.input_cursor_pos = 0; }
-                    _ => { s.input_value.clear(); s.input_cursor_pos = 0; }
+                    0 => {
+                        s.init_branch_name = "main".into();
+                        s.init_wizard_step = 2;
+                        s.input_value.clear();
+                        s.input_cursor_pos = 0;
+                    }
+                    1 => {
+                        s.init_branch_name = "master".into();
+                        s.init_wizard_step = 2;
+                        s.input_value.clear();
+                        s.input_cursor_pos = 0;
+                    }
+                    _ => {
+                        s.input_value.clear();
+                        s.input_cursor_pos = 0;
+                    }
                 }
             } else if s.init_wizard_step == 3 && s.init_cursor == 0 {
                 s.init_wizard_active = false;
@@ -184,7 +209,10 @@ pub fn handle_init_wizard_key(code: KeyCode, s: &mut AppState) {
 pub fn handle_input_key(code: KeyCode, s: &mut AppState) {
     match code {
         KeyCode::Esc => {
-            s.show_input = false; s.input_value.clear(); s.input_cursor_pos = 0; s.suggestions.clear();
+            s.show_input = false;
+            s.input_value.clear();
+            s.input_cursor_pos = 0;
+            s.suggestions.clear();
         }
         KeyCode::Tab => {
             if !s.suggestions.is_empty() {
@@ -210,7 +238,10 @@ pub fn handle_input_key(code: KeyCode, s: &mut AppState) {
                 s.update_suggestions();
             } else {
                 let cmd = s.input_value.clone();
-                s.show_input = false; s.input_value.clear(); s.input_cursor_pos = 0; s.suggestions.clear();
+                s.show_input = false;
+                s.input_value.clear();
+                s.input_cursor_pos = 0;
+                s.suggestions.clear();
                 s.execute_command(&cmd);
             }
         }
@@ -221,8 +252,16 @@ pub fn handle_input_key(code: KeyCode, s: &mut AppState) {
                 s.update_suggestions();
             }
         }
-        KeyCode::Left => { if s.input_cursor_pos > 0 { s.input_cursor_pos -= 1; } }
-        KeyCode::Right => { if s.input_cursor_pos < s.input_value.len() { s.input_cursor_pos += 1; } }
+        KeyCode::Left => {
+            if s.input_cursor_pos > 0 {
+                s.input_cursor_pos -= 1;
+            }
+        }
+        KeyCode::Right => {
+            if s.input_cursor_pos < s.input_value.len() {
+                s.input_cursor_pos += 1;
+            }
+        }
         KeyCode::Char(c) => {
             s.input_value.insert(s.input_cursor_pos, c);
             s.input_cursor_pos += 1;
@@ -239,11 +278,16 @@ pub fn handle_no_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         }
         KeyCode::Enter => {
             if s.init_cursor == 0 {
-                s.init_wizard_active = true; s.init_wizard_step = 1; s.init_cursor = 0;
-                s.init_branch_name = "main".into(); s.init_remote_url.clear();
+                s.init_wizard_active = true;
+                s.init_wizard_step = 1;
+                s.init_cursor = 0;
+                s.init_branch_name = "main".into();
+                s.init_remote_url.clear();
                 s.status_message = "Select main branch name.".to_string();
             } else {
-                s.show_input = true; s.input_value = "/cd ".into(); s.input_cursor_pos = 4;
+                s.show_input = true;
+                s.input_value = "/cd ".into();
+                s.input_cursor_pos = 4;
                 s.update_suggestions();
             }
         }
@@ -273,12 +317,15 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                     let fi = entry.file_idx;
                     s.selected_file_idx = fi;
                 }
-                s.update_diff_content(); s.diff_scroll_offset = 0;
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
-                s.selected_commit_idx = (s.selected_commit_idx + s.commits.len() - 1) % s.commits.len();
+                s.selected_commit_idx =
+                    (s.selected_commit_idx + s.commits.len() - 1) % s.commits.len();
                 s.commit_scroll_offset = 0;
                 s.commit_detail_scroll = 0;
-                s.update_diff_content(); s.diff_scroll_offset = 0;
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else if s.focus_pane == "diff" && s.diff_scroll_offset > 0 {
                 s.diff_scroll_offset -= 1;
             }
@@ -290,12 +337,14 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                     let fi = entry.file_idx;
                     s.selected_file_idx = fi;
                 }
-                s.update_diff_content(); s.diff_scroll_offset = 0;
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + 1) % s.commits.len();
                 s.commit_scroll_offset = 0;
                 s.commit_detail_scroll = 0;
-                s.update_diff_content(); s.diff_scroll_offset = 0;
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else if s.focus_pane == "diff" {
                 s.diff_scroll_offset += 1;
             }
@@ -348,8 +397,17 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::Char('d') | KeyCode::Char('D') => s.execute_command("/stash-pop"),
         KeyCode::Char('b') | KeyCode::Char('B') => s.execute_command("/branches"),
         KeyCode::Char('g') | KeyCode::Char('G') => s.execute_command("/repos"),
-        KeyCode::Char('n') | KeyCode::Char('N') => { s.show_input = true; s.input_value = "/branch ".into(); s.input_cursor_pos = 8; s.update_suggestions(); }
-        KeyCode::Char('o') | KeyCode::Char('O') => { s.show_input = true; s.input_value = "/remote ".into(); s.input_cursor_pos = 8; }
+        KeyCode::Char('n') | KeyCode::Char('N') => {
+            s.show_input = true;
+            s.input_value = "/branch ".into();
+            s.input_cursor_pos = 8;
+            s.update_suggestions();
+        }
+        KeyCode::Char('o') | KeyCode::Char('O') => {
+            s.show_input = true;
+            s.input_value = "/remote ".into();
+            s.input_cursor_pos = 8;
+        }
         // ── Original shortcuts ──────────────────────────────────
         KeyCode::Char('c') | KeyCode::Char('C') => {
             s.show_commit_modal = true;
@@ -376,10 +434,17 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 };
             }
         }
-        KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => { s.show_help_modal = true; }
+        KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => {
+            s.show_help_modal = true;
+        }
         // Capital d is already handled above with stash-pop
         KeyCode::Char('q') | KeyCode::Char('Q') => return false,
-        KeyCode::Char('/') => { s.show_input = true; s.input_value = "/".into(); s.input_cursor_pos = 1; s.update_suggestions(); }
+        KeyCode::Char('/') => {
+            s.show_input = true;
+            s.input_value = "/".into();
+            s.input_cursor_pos = 1;
+            s.update_suggestions();
+        }
         // ── Scroll support ────────────────────────────────────────
         KeyCode::PageDown => {
             if s.focus_pane == "commits" && s.show_commit_detail {
@@ -392,10 +457,22 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         }
         KeyCode::PageUp => {
             if s.focus_pane == "commits" && s.show_commit_detail {
-                if s.commit_detail_scroll >= 5 { s.commit_detail_scroll -= 5; } else { s.commit_detail_scroll = 0; }
+                if s.commit_detail_scroll >= 5 {
+                    s.commit_detail_scroll -= 5;
+                } else {
+                    s.commit_detail_scroll = 0;
+                }
             } else if s.focus_pane == "commits" {
-                if s.commit_scroll_offset >= 5 { s.commit_scroll_offset -= 5; } else { s.commit_scroll_offset = 0; }
-            } else if s.diff_scroll_offset >= 5 { s.diff_scroll_offset -= 5; } else { s.diff_scroll_offset = 0; }
+                if s.commit_scroll_offset >= 5 {
+                    s.commit_scroll_offset -= 5;
+                } else {
+                    s.commit_scroll_offset = 0;
+                }
+            } else if s.diff_scroll_offset >= 5 {
+                s.diff_scroll_offset -= 5;
+            } else {
+                s.diff_scroll_offset = 0;
+            }
         }
         _ => {}
     }
@@ -473,8 +550,7 @@ pub fn handle_confirm_remove_key(code: KeyCode, s: &mut AppState) {
             match git::git_remove_repo() {
                 Ok(()) => {
                     s.refresh_git_status();
-                    s.status_message =
-                        translate(&s.language, "status_remove_ok").into_owned();
+                    s.status_message = translate(&s.language, "status_remove_ok").into_owned();
                 }
                 Err(e) => {
                     s.status_message = trf(&s.language, "status_err_remove_repo", &[&e]);
@@ -504,7 +580,9 @@ pub fn handle_update_modal_key(code: KeyCode, s: &mut AppState) {
             #[cfg(target_os = "linux")]
             let _ = std::process::Command::new("xdg-open").arg(url).spawn();
             #[cfg(target_os = "windows")]
-            let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
+            let _ = std::process::Command::new("cmd")
+                .args(["/C", "start", "", url])
+                .spawn();
             s.status_message = format!("Opening {} ...", url);
         }
         KeyCode::Char('2') | KeyCode::Char('n') | KeyCode::Char('N') => {
@@ -522,10 +600,7 @@ pub fn handle_update_modal_key(code: KeyCode, s: &mut AppState) {
             });
             cfg.skipped_version = Some(s.latest_version.clone());
             let _ = save_config(&cfg);
-            s.status_message = format!(
-                "Update v{} will not be shown again.",
-                s.latest_version
-            );
+            s.status_message = format!("Update v{} will not be shown again.", s.latest_version);
         }
         _ => {}
     }
@@ -535,7 +610,8 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
     match key.code {
         KeyCode::Enter => {
             let session_id = &s.session_id;
-            let response_path = std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
+            let response_path =
+                std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
             let _ = std::fs::write(&response_path, &s.credentials_input);
             s.show_credentials_modal = false;
             s.credentials_input.clear();
@@ -543,7 +619,8 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
         }
         KeyCode::Esc => {
             let session_id = &s.session_id;
-            let response_path = std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
+            let response_path =
+                std::env::temp_dir().join(format!("git-hero-askpass-response-{}.txt", session_id));
             let _ = std::fs::write(&response_path, "");
             s.show_credentials_modal = false;
             s.credentials_input.clear();
@@ -567,9 +644,7 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
         KeyCode::Left => {
             s.credentials_cursor = s.credentials_cursor.saturating_sub(1);
         }
-        KeyCode::Right
-            if s.credentials_cursor < s.credentials_input.len() =>
-        {
+        KeyCode::Right if s.credentials_cursor < s.credentials_input.len() => {
             s.credentials_cursor += 1;
         }
         _ => {}
@@ -580,25 +655,32 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
 /// Extracted so we don't duplicate the import of `commit_modal_editor_width`
 /// inside the hot path.
 fn build_commit_view(s: &AppState) -> Vec<(usize, usize, String, usize)> {
-    crate::ui::modals::build_wrapped_view(&s.commit_message_lines, crate::ui::modals::commit_modal_editor_width())
+    crate::ui::modals::build_wrapped_view(
+        &s.commit_message_lines,
+        crate::ui::modals::commit_modal_editor_width(),
+    )
 }
 
 pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
     let code = key.code;
     let mods = key.modifiers;
-    
+
     // Shift+Enter: new line
     if code == KeyCode::Enter && mods.contains(KeyModifiers::SHIFT) {
         let current_line = &s.commit_message_lines[s.commit_cursor_row];
         let col = s.commit_cursor_col.min(current_line.len());
-        let (before, after) = (current_line[..col].to_string(), current_line[col..].to_string());
+        let (before, after) = (
+            current_line[..col].to_string(),
+            current_line[col..].to_string(),
+        );
         s.commit_message_lines[s.commit_cursor_row] = before;
-        s.commit_message_lines.insert(s.commit_cursor_row + 1, after);
+        s.commit_message_lines
+            .insert(s.commit_cursor_row + 1, after);
         s.commit_cursor_row += 1;
         s.commit_cursor_col = 0;
         return;
     }
-    
+
     // Confirm commit: Enter only (avoid accidental commit when typing 'y')
     if code == KeyCode::Enter {
         let msg = s.commit_message_lines.join("\n");
@@ -685,15 +767,17 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
                 return;
             }
             let current_pos = crate::ui::modals::find_cursor_in_view(
-                &view, s.commit_cursor_row, s.commit_cursor_col,
+                &view,
+                s.commit_cursor_row,
+                s.commit_cursor_col,
             );
             let (wrapped_row, wrapped_col) = current_pos.unwrap_or((0, 0));
 
             if wrapped_row > 0 {
                 // Move up one visual line, keeping horizontal position.
-                if let Some((row, col)) = crate::ui::modals::wrapped_to_logical(
-                    &view, wrapped_row - 1, wrapped_col,
-                ) {
+                if let Some((row, col)) =
+                    crate::ui::modals::wrapped_to_logical(&view, wrapped_row - 1, wrapped_col)
+                {
                     s.commit_cursor_row = row;
                     s.commit_cursor_col = col;
                 }
@@ -710,15 +794,17 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
                 return;
             }
             let current_pos = crate::ui::modals::find_cursor_in_view(
-                &view, s.commit_cursor_row, s.commit_cursor_col,
+                &view,
+                s.commit_cursor_row,
+                s.commit_cursor_col,
             );
             let (wrapped_row, wrapped_col) = current_pos.unwrap_or((0, 0));
 
             if wrapped_row + 1 < view.len() {
                 // Move down one visual line, keeping horizontal position.
-                if let Some((row, col)) = crate::ui::modals::wrapped_to_logical(
-                    &view, wrapped_row + 1, wrapped_col,
-                ) {
+                if let Some((row, col)) =
+                    crate::ui::modals::wrapped_to_logical(&view, wrapped_row + 1, wrapped_col)
+                {
                     s.commit_cursor_row = row;
                     s.commit_cursor_col = col;
                 }

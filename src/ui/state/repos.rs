@@ -105,7 +105,9 @@ fn scan_root(cwd: &Path) -> PathBuf {
 /// Pure decision behind [`scan_root`], testable without touching the disk.
 fn scan_root_for(is_repo: bool, cwd: &Path) -> PathBuf {
     if is_repo {
-        cwd.parent().map(Path::to_path_buf).unwrap_or_else(|| cwd.to_path_buf())
+        cwd.parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| cwd.to_path_buf())
     } else {
         cwd.to_path_buf()
     }
@@ -211,7 +213,13 @@ mod tests {
 
     #[test]
     fn entry_maps_detached_head_symbol() {
-        let e = entry_from_snapshot(OsStr::new("x"), "p".into(), &snap("(detached)", 0, 0, 0), None, 100);
+        let e = entry_from_snapshot(
+            OsStr::new("x"),
+            "p".into(),
+            &snap("(detached)", 0, 0, 0),
+            None,
+            100,
+        );
         assert_eq!(e.branch, "\u{2205}");
         assert!(e.age.is_empty(), "repo without commits shows no age");
     }
@@ -274,9 +282,36 @@ mod tests {
         let scan = RepoScan {
             root: String::new(),
             entries: vec![
-                RepoEntry { path: String::new(), name: "a".into(), branch: String::new(), ahead: 0, behind: 0, dirty: 2, age: String::new(), last_commit: None },
-                RepoEntry { path: String::new(), name: "b".into(), branch: String::new(), ahead: 0, behind: 0, dirty: 0, age: String::new(), last_commit: None },
-                RepoEntry { path: String::new(), name: "c".into(), branch: String::new(), ahead: 0, behind: 0, dirty: 1, age: String::new(), last_commit: None },
+                RepoEntry {
+                    path: String::new(),
+                    name: "a".into(),
+                    branch: String::new(),
+                    ahead: 0,
+                    behind: 0,
+                    dirty: 2,
+                    age: String::new(),
+                    last_commit: None,
+                },
+                RepoEntry {
+                    path: String::new(),
+                    name: "b".into(),
+                    branch: String::new(),
+                    ahead: 0,
+                    behind: 0,
+                    dirty: 0,
+                    age: String::new(),
+                    last_commit: None,
+                },
+                RepoEntry {
+                    path: String::new(),
+                    name: "c".into(),
+                    branch: String::new(),
+                    ahead: 0,
+                    behind: 0,
+                    dirty: 1,
+                    age: String::new(),
+                    last_commit: None,
+                },
             ],
         };
         assert_eq!(scan.dirty_count(), 2);
@@ -305,7 +340,11 @@ mod tests {
                     .args(args)
                     .output()
                     .unwrap();
-                assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+                assert!(
+                    out.status.success(),
+                    "git {args:?} failed: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
             };
             git(&["init", "-b", "main"]);
             git(&["config", "user.email", "t@t"]);
@@ -329,7 +368,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&base);
 
         let names: Vec<&str> = scan.entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(names, vec!["app-new", "app-old"], "newest activity first, non-repos skipped");
+        assert_eq!(
+            names,
+            vec!["app-new", "app-old"],
+            "newest activity first, non-repos skipped"
+        );
         assert_eq!(scan.dirty_count(), 1);
         assert_eq!(scan.entries[0].dirty, 1);
         assert_eq!(scan.entries[0].branch, "main");

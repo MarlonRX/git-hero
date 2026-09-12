@@ -261,12 +261,13 @@ pub fn run_git_async(
         let mut child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
-                let _ = tx.send(crate::ui::state::TuiMessage::ConsoleOutput(
-                    format!("Failed to spawn git: {}\n", e),
-                ));
-                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(
-                    Err(e.to_string()),
-                ));
+                let _ = tx.send(crate::ui::state::TuiMessage::ConsoleOutput(format!(
+                    "Failed to spawn git: {}\n",
+                    e
+                )));
+                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(
+                    e.to_string()
+                )));
                 return;
             }
         };
@@ -274,18 +275,18 @@ pub fn run_git_async(
         let stdout = match child.stdout.take() {
             Some(s) => s,
             None => {
-                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(
-                    Err("Failed to capture git stdout".into()),
-                ));
+                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(
+                    "Failed to capture git stdout".into(),
+                )));
                 return;
             }
         };
         let stderr = match child.stderr.take() {
             Some(s) => s,
             None => {
-                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(
-                    Err("Failed to capture git stderr".into()),
-                ));
+                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(
+                    "Failed to capture git stderr".into(),
+                )));
                 return;
             }
         };
@@ -301,14 +302,15 @@ pub fn run_git_async(
                 let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Ok(())));
             }
             Ok(status) => {
-                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(
-                    format!("Command failed with exit status: {}", status),
-                )));
+                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(format!(
+                    "Command failed with exit status: {}",
+                    status
+                ))));
             }
             Err(e) => {
-                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(
-                    Err(e.to_string()),
-                ));
+                let _ = tx.send(crate::ui::state::TuiMessage::CommandFinished(Err(
+                    e.to_string()
+                )));
             }
         }
     });
@@ -392,9 +394,7 @@ fn spawn_pipe_thread<R: Read + Send + 'static>(
                 Ok(0) => break,
                 Ok(n) => {
                     if let Ok(s) = str::from_utf8(&buf[..n]) {
-                        let _ = tx.send(crate::ui::state::TuiMessage::ConsoleOutput(
-                            s.to_owned(),
-                        ));
+                        let _ = tx.send(crate::ui::state::TuiMessage::ConsoleOutput(s.to_owned()));
                     }
                 }
                 Err(_) => break,
@@ -530,11 +530,7 @@ pub fn last_commit_epoch_in(dir: &str) -> Option<u64> {
     if !output.status.success() {
         return None;
     }
-    str::from_utf8(&output.stdout)
-        .ok()?
-        .trim()
-        .parse()
-        .ok()
+    str::from_utf8(&output.stdout).ok()?.trim().parse().ok()
 }
 
 /// Parse the textual output of `git status --porcelain=v2`.
@@ -711,7 +707,8 @@ pub fn check_latest_version() -> Result<String, crate::git_error::GitError> {
         "ls-remote",
         "--tags",
         "https://github.com/MarlonRX/git-hero",
-    ]) && let Some(version) = parse_version_from_ls_remote(&output) {
+    ]) && let Some(version) = parse_version_from_ls_remote(&output)
+    {
         return Ok(version);
     }
 
@@ -735,8 +732,16 @@ fn parse_version_from_ls_remote(output: &str) -> Option<String> {
             }
         })
         .max_by(|a, b| {
-            let va = crate::version::Version::parse(a).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
-            let vb = crate::version::Version::parse(b).unwrap_or(crate::version::Version { major: 0, minor: 0, patch: 0 });
+            let va = crate::version::Version::parse(a).unwrap_or(crate::version::Version {
+                major: 0,
+                minor: 0,
+                patch: 0,
+            });
+            let vb = crate::version::Version::parse(b).unwrap_or(crate::version::Version {
+                major: 0,
+                minor: 0,
+                patch: 0,
+            });
             va.cmp(&vb)
         })
 }
@@ -749,12 +754,18 @@ fn check_latest_version_http() -> Result<String, crate::git_error::GitError> {
     {
         // Use PowerShell on Windows
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &format!(
-                "(Invoke-RestMethod -Uri '{}' -UseBasicParsing).tag_name -replace '^v',''",
-                url
-            )])
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "(Invoke-RestMethod -Uri '{}' -UseBasicParsing).tag_name -replace '^v',''",
+                    url
+                ),
+            ])
             .output()
-            .map_err(|e| crate::git_error::GitError::Other(format!("failed to run powershell: {e}")))?;
+            .map_err(|e| {
+                crate::git_error::GitError::Other(format!("failed to run powershell: {e}"))
+            })?;
 
         if output.status.success() {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -791,7 +802,9 @@ fn check_latest_version_http() -> Result<String, crate::git_error::GitError> {
         }
     }
 
-    Err(crate::git_error::GitError::Other("could not check for updates".into()))
+    Err(crate::git_error::GitError::Other(
+        "could not check for updates".into(),
+    ))
 }
 
 // ── Tests ──────────────────────────────────────────────────────────
@@ -899,7 +912,10 @@ mod tests {
             ([' ', ' '], " "),
         ];
         for (xy, expected) in cases {
-            let f = FileSnapshot { path: "x".into(), xy };
+            let f = FileSnapshot {
+                path: "x".into(),
+                xy,
+            };
             assert_eq!(f.status(), expected, "xy={:?}", xy);
         }
     }
@@ -955,7 +971,9 @@ mod tests {
 
     #[test]
     fn unrelated_error_is_not_a_repo() {
-        assert!(!is_not_a_repo_message("fatal: Unable to create '.git/index.lock'"));
+        assert!(!is_not_a_repo_message(
+            "fatal: Unable to create '.git/index.lock'"
+        ));
         assert!(!is_not_a_repo_message(""));
     }
 

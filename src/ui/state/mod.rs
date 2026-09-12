@@ -1,11 +1,11 @@
 use std::fs;
 use std::time::SystemTime;
 
-use crate::config::{load_config, Config};
+use crate::config::{Config, load_config};
 use crate::git;
 use crate::i18n::translate;
 use crate::log;
-use crate::theme::{get_theme_by_name, Theme};
+use crate::theme::{Theme, get_theme_by_name};
 
 pub mod command;
 pub mod commands;
@@ -94,18 +94,18 @@ pub struct AppState {
     pub focus_pane: String,
     pub active_diff: String,
     pub diff_scroll_offset: usize,
-    pub commit_scroll_offset: usize,  // Scroll offset for commits panel
-    
+    pub commit_scroll_offset: usize, // Scroll offset for commits panel
+
     // ── Commit Detail View ────────────────────────────────────────
-    pub show_commit_detail: bool,  // Show detailed commit info when clicking/entering on commit
-    pub commit_detail_diff: String,  // Diff for the selected commit
-    pub commit_detail_scroll: usize,  // Scroll for commit detail view
-    
+    pub show_commit_detail: bool, // Show detailed commit info when clicking/entering on commit
+    pub commit_detail_diff: String, // Diff for the selected commit
+    pub commit_detail_scroll: usize, // Scroll for commit detail view
+
     // ── Diff Cache (performance) ─────────────────────────────────
     /// Last `active_diff` content rendered, used to invalidate the line cache.
     cached_diff_content: String,
     cached_diff_lines: Vec<ratatui::text::Line<'static>>,
-    cached_diff_width: u16,  // Width used for side-by-side rendering
+    cached_diff_width: u16, // Width used for side-by-side rendering
     /// Theme name used when `cached_diff_lines` was last rendered. Phase 2.8:
     /// re-render when the user switches theme even if `active_diff` is identical.
     cached_diff_theme_name: Option<&'static str>,
@@ -254,7 +254,7 @@ impl AppState {
             init_cursor: 0,
             init_branch_name: String::new(),
             init_remote_url: String::new(),
-            
+
             // Multiline Commit Modal
             show_commit_modal: false,
             commit_message_lines: vec![String::new()],
@@ -279,10 +279,13 @@ impl AppState {
             latest_version: String::new(),
 
             // Credentials Handler
-            session_id: format!("{:.3}", std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs_f64()),
+            session_id: format!(
+                "{:.3}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs_f64()
+            ),
             tx: None,
             show_credentials_modal: false,
             credentials_prompt: String::new(),
@@ -293,8 +296,7 @@ impl AppState {
 
         if config.language.is_empty() {
             state.setup_step = 1;
-            state.status_message =
-                translate(&state.language, "welcome_setup").into_owned();
+            state.status_message = translate(&state.language, "welcome_setup").into_owned();
         } else {
             state.refresh_git_status();
         }
@@ -368,8 +370,7 @@ impl AppState {
                 self.flat_entries.clear();
                 self.commits.clear();
                 self.active_diff.clear();
-                self.status_message =
-                    translate(&self.language, "warn_not_repo").into_owned();
+                self.status_message = translate(&self.language, "warn_not_repo").into_owned();
             }
             Err(e) => {
                 // We are inside a repo (git answered) but status failed
@@ -496,7 +497,11 @@ impl AppState {
                     }
                 })
                 .unwrap_or_else(|e| format!("Error showing commit: {}", e)),
-            DiffKey::File { path, staged, status } => {
+            DiffKey::File {
+                path,
+                staged,
+                status,
+            } => {
                 if status == "??" {
                     return fs::read_to_string(path)
                         .map(|content| {
@@ -563,12 +568,12 @@ impl AppState {
             self.cached_diff_content = self.active_diff.clone();
             self.cached_diff_width = width;
             self.cached_diff_theme_name = Some(self.theme.name);
-            self.cached_diff_lines = super::rendering::render_diff_side_by_side(
-                &self.active_diff,
-                width,
-                &self.theme,
-            );
-            log::log_debug(&format!("Diff cached: {} lines", self.cached_diff_lines.len()));
+            self.cached_diff_lines =
+                super::rendering::render_diff_side_by_side(&self.active_diff, width, &self.theme);
+            log::log_debug(&format!(
+                "Diff cached: {} lines",
+                self.cached_diff_lines.len()
+            ));
         }
         self.cached_diff_lines.clone()
     }

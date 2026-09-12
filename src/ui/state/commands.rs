@@ -8,13 +8,13 @@
 //! `run_pull` / `run_push` are called from the push/pull confirmation
 //! modals (the user has *already* confirmed, so they bypass the dispatcher).
 
-use crate::config::{load_config, save_config, Config};
+use super::command::Command;
+use super::suggestions::expand_path;
+use crate::config::{Config, load_config, save_config};
 use crate::git;
 use crate::i18n::{translate, trf};
 use crate::theme::get_themes;
 use crate::ui::state::AppState;
-use super::command::Command;
-use super::suggestions::expand_path;
 
 impl AppState {
     // ── Async helpers (unchanged) ─────────────────────────────────
@@ -61,8 +61,7 @@ impl AppState {
         match Command::parse(input) {
             Err(e) => self.status_message = e.to_string(),
             Ok(Command::Unknown(input)) => {
-                self.status_message =
-                    trf(&self.language, "status_unknown_cmd", &[&input]);
+                self.status_message = trf(&self.language, "status_unknown_cmd", &[&input]);
             }
             Ok(cmd) => self.dispatch(cmd),
         }
@@ -90,9 +89,7 @@ impl AppState {
             Command::CreateBranch(name) => self.cmd_create_branch(&name),
             Command::ListConfig => self.cmd_list_config(),
             Command::ConfigLocal { key, value } => self.cmd_config_local(&key, value.as_deref()),
-            Command::ConfigGlobal { key, value } => {
-                self.cmd_config_global(&key, value.as_deref())
-            }
+            Command::ConfigGlobal { key, value } => self.cmd_config_global(&key, value.as_deref()),
             Command::Stash => self.cmd_stash(),
             Command::StashPop => self.cmd_stash_pop(),
             Command::SetLanguage(lang) => self.cmd_set_language(&lang),
@@ -158,8 +155,8 @@ impl AppState {
             return;
         }
         if self.console_running {
-            self.status_message = translate(&self.language, "status_cmd_already_running")
-                .into_owned();
+            self.status_message =
+                translate(&self.language, "status_cmd_already_running").into_owned();
             return;
         }
         self.show_confirm_pull = true;
@@ -170,8 +167,8 @@ impl AppState {
             return;
         }
         if self.console_running {
-            self.status_message = translate(&self.language, "status_cmd_already_running")
-                .into_owned();
+            self.status_message =
+                translate(&self.language, "status_cmd_already_running").into_owned();
             return;
         }
         self.show_confirm_push = true;
@@ -208,7 +205,8 @@ impl AppState {
                 self.selected_commit_idx = 0;
                 self.diff_scroll_offset = 0;
                 self.refresh_git_status();
-                self.status_message = translate(&self.language, "status_commit_success").into_owned();
+                self.status_message =
+                    translate(&self.language, "status_commit_success").into_owned();
             }
             Err(e) => {
                 self.status_message = trf(&self.language, "status_err_commit", &[&e]);
@@ -230,7 +228,6 @@ impl AppState {
             }
         }
     }
-
 
     // ── /stage-all / /unstage-all / /undo-commit / /remove-repo ─
 
@@ -254,7 +251,8 @@ impl AppState {
         match git::git_unstage_all() {
             Ok(()) => {
                 self.refresh_git_status();
-                self.status_message = translate(&self.language, "status_unstage_all_ok").into_owned();
+                self.status_message =
+                    translate(&self.language, "status_unstage_all_ok").into_owned();
             }
             Err(e) => self.status_message = trf(&self.language, "status_err_unstage", &[&e]),
         }
@@ -268,7 +266,8 @@ impl AppState {
         match git::git_reset_soft(1) {
             Ok(()) => {
                 self.refresh_git_status();
-                self.status_message = translate(&self.language, "status_undo_commit_ok").into_owned();
+                self.status_message =
+                    translate(&self.language, "status_undo_commit_ok").into_owned();
             }
             Err(e) => self.status_message = trf(&self.language, "status_err_undo_commit", &[&e]),
         }
@@ -384,24 +383,16 @@ impl AppState {
         match value {
             Some(v) => match git::git_config_set_local(key, v) {
                 Ok(()) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_config_set_local",
-                        &[key, v],
-                    );
+                    self.status_message = trf(&self.language, "status_config_set_local", &[key, v]);
                 }
                 Err(e) => {
-                    self.status_message =
-                        trf(&self.language, "status_err_config_set", &[&e]);
+                    self.status_message = trf(&self.language, "status_err_config_set", &[&e]);
                 }
             },
             None => match git::git_config_get(key) {
                 Ok(val) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_config_get_local",
-                        &[key, &val],
-                    );
+                    self.status_message =
+                        trf(&self.language, "status_config_get_local", &[key, &val]);
                 }
                 Err(_) => {
                     // Try global as a fallback.
@@ -427,34 +418,21 @@ impl AppState {
         match value {
             Some(v) => match git::git_config_set_global(key, v) {
                 Ok(()) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_config_set_global",
-                        &[key, v],
-                    );
+                    self.status_message =
+                        trf(&self.language, "status_config_set_global", &[key, v]);
                 }
                 Err(e) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_err_config_set_global",
-                        &[&e],
-                    );
+                    self.status_message =
+                        trf(&self.language, "status_err_config_set_global", &[&e]);
                 }
             },
             None => match git::git_config_get(key) {
                 Ok(val) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_config_get_global",
-                        &[key, &val],
-                    );
+                    self.status_message =
+                        trf(&self.language, "status_config_get_global", &[key, &val]);
                 }
                 Err(e) => {
-                    self.status_message = trf(
-                        &self.language,
-                        "status_err_config_get",
-                        &[&e],
-                    );
+                    self.status_message = trf(&self.language, "status_err_config_get", &[&e]);
                 }
             },
         }
@@ -482,12 +460,9 @@ impl AppState {
         match git::git_stash_pop() {
             Ok(()) => {
                 self.refresh_git_status();
-                self.status_message =
-                    translate(&self.language, "status_stash_pop_ok").into_owned();
+                self.status_message = translate(&self.language, "status_stash_pop_ok").into_owned();
             }
-            Err(e) => {
-                self.status_message = trf(&self.language, "status_err_stash_pop", &[&e])
-            }
+            Err(e) => self.status_message = trf(&self.language, "status_err_stash_pop", &[&e]),
         }
     }
 

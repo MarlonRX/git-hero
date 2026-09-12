@@ -65,7 +65,10 @@ mod tests {
             stderr: "fatal: bad ref".into(),
             code: Some(128),
         };
-        assert_eq!(e.to_string(), "git exited with status Some(128): fatal: bad ref");
+        assert_eq!(
+            e.to_string(),
+            "git exited with status Some(128): fatal: bad ref"
+        );
     }
 
     #[test]

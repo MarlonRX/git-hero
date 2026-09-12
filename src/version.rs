@@ -36,7 +36,10 @@ pub fn full() -> String {
 
     let profile_tag = if BUILD_PROFILE == "debug" { "-dev" } else { "" };
     let dirty_mark = if GIT_DIRTY == "1" { "*" } else { "" };
-    format!("v{}{} ({}){}", PKG_VERSION, profile_tag, GIT_HASH, dirty_mark)
+    format!(
+        "v{}{} ({}){}",
+        PKG_VERSION, profile_tag, GIT_HASH, dirty_mark
+    )
 }
 
 /// Returns `true` if the current binary is a release build with a clean tree.
@@ -82,13 +85,27 @@ mod tests {
     #[test]
     fn version_parse_v_prefix() {
         let v = Version::parse("v0.1.0").unwrap();
-        assert_eq!(v, Version { major: 0, minor: 1, patch: 0 });
+        assert_eq!(
+            v,
+            Version {
+                major: 0,
+                minor: 1,
+                patch: 0
+            }
+        );
     }
 
     #[test]
     fn version_parse_no_prefix() {
         let v = Version::parse("1.2.3").unwrap();
-        assert_eq!(v, Version { major: 1, minor: 2, patch: 3 });
+        assert_eq!(
+            v,
+            Version {
+                major: 1,
+                minor: 2,
+                patch: 3
+            }
+        );
     }
 
     #[test]
@@ -100,8 +117,16 @@ mod tests {
 
     #[test]
     fn version_ordering() {
-        let v1 = Version { major: 0, minor: 9, patch: 0 };
-        let v2 = Version { major: 0, minor: 10, patch: 0 };
+        let v1 = Version {
+            major: 0,
+            minor: 9,
+            patch: 0,
+        };
+        let v2 = Version {
+            major: 0,
+            minor: 10,
+            patch: 0,
+        };
         assert!(v1 < v2);
         assert!(v2 > v1);
     }

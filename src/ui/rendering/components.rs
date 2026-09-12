@@ -1,11 +1,11 @@
+use crate::theme::Theme;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Paragraph, BorderType},
-    Frame,
+    widgets::{BorderType, Paragraph},
 };
-use crate::theme::Theme;
 
 /// Replace home directory with ~ for readable display
 pub fn short_path(path: &str) -> String {
@@ -26,19 +26,42 @@ pub fn draw_solid_border(f: &mut Frame, area: Rect, theme: &Theme) {
     // Top & bottom
     f.render_widget(
         Paragraph::new("\u{2588}".repeat(w)).style(s),
-        Rect { x: area.x, y: area.y, width: area.width, height: 1 },
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: 1,
+        },
     );
     f.render_widget(
         Paragraph::new("\u{2588}".repeat(w)).style(s),
-        Rect { x: area.x, y: area.y + area.height - 1, width: area.width, height: 1 },
+        Rect {
+            x: area.x,
+            y: area.y + area.height - 1,
+            width: area.width,
+            height: 1,
+        },
     );
     // Left & right
     for row in 1..area.height.saturating_sub(1) {
         let y = area.y + row;
-        f.render_widget(Paragraph::new("\u{2588}").style(s), Rect { x: area.x, y, width: 1, height: 1 });
         f.render_widget(
             Paragraph::new("\u{2588}").style(s),
-            Rect { x: area.x + area.width - 1, y, width: 1, height: 1 },
+            Rect {
+                x: area.x,
+                y,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new("\u{2588}").style(s),
+            Rect {
+                x: area.x + area.width - 1,
+                y,
+                width: 1,
+                height: 1,
+            },
         );
     }
 }
@@ -48,12 +71,21 @@ pub fn draw_solid_hline(f: &mut Frame, x: u16, y: u16, width: u16, color: ratatu
     let s = Style::default().bg(color).fg(color);
     f.render_widget(
         Paragraph::new("\u{2588}".repeat(width as usize)).style(s),
-        Rect { x, y, width, height: 1 },
+        Rect {
+            x,
+            y,
+            width,
+            height: 1,
+        },
     );
 }
 
 /// Blend a color with background at given opacity (0.0 = bg only, 1.0 = full color)
-pub fn soften(color: ratatui::style::Color, bg: ratatui::style::Color, opacity: f32) -> ratatui::style::Color {
+pub fn soften(
+    color: ratatui::style::Color,
+    bg: ratatui::style::Color,
+    opacity: f32,
+) -> ratatui::style::Color {
     use ratatui::style::Color;
     let to_rgb = |c: Color| -> (u8, u8, u8) {
         match c {
@@ -78,11 +110,13 @@ pub fn soften(color: ratatui::style::Color, bg: ratatui::style::Color, opacity: 
 /// Robust side-by-side diff renderer. Same simple pattern: split + take + map.
 pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Line<'static>> {
     let half = (width.saturating_sub(3) / 2) as usize; // -3 for " ▎ " separator
-    if half < 10 { return render_diff_lines(diff, theme); } // fallback for tiny widths
-    
+    if half < 10 {
+        return render_diff_lines(diff, theme);
+    } // fallback for tiny widths
+
     let warn_bg = soften(theme.warning, theme.background, 0.25);
     let succ_bg = soften(theme.success, theme.background, 0.25);
-    
+
     diff.split('\n')
         .take(200)
         .map(|line| {
@@ -105,74 +139,134 @@ pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Li
                 res
             };
 
-            if line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("commit ") {
+            if line.starts_with("diff --git")
+                || line.starts_with("index ")
+                || line.starts_with("commit ")
+            {
                 return Line::from(vec![
-                    Span::styled(fit(line), Style::default().fg(theme.accent).bg(theme.background).add_modifier(Modifier::BOLD)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        fit(line),
+                        Style::default()
+                            .fg(theme.accent)
+                            .bg(theme.background)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.background)),
                 ]);
             }
             if line.starts_with("@@") {
                 return Line::from(vec![
-                    Span::styled(fit(line), Style::default().fg(theme.primary).bg(theme.surface).add_modifier(Modifier::BOLD)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.surface)),
+                    Span::styled(
+                        fit(line),
+                        Style::default()
+                            .fg(theme.primary)
+                            .bg(theme.surface)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.surface),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.surface)),
                 ]);
             }
             if line.starts_with("Author:") || line.starts_with("Date:") {
                 return Line::from(vec![
-                    Span::styled(fit(line), Style::default().fg(theme.dimmed).bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        fit(line),
+                        Style::default().fg(theme.dimmed).bg(theme.background),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.background)),
                 ]);
             }
             if line.trim().is_empty() {
                 return Line::from(vec![
                     Span::styled(fit(""), Style::default().bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.background)),
                 ]);
             }
-            
+
             if line.starts_with('-') && !line.starts_with("---") {
                 let text = if line.len() > 1 { &line[1..] } else { "" };
                 Line::from(vec![
                     Span::styled(fit(text), Style::default().fg(theme.foreground).bg(warn_bg)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.background)),
                 ])
             } else if line.starts_with('+') && !line.starts_with("+++") {
                 let text = if line.len() > 1 { &line[1..] } else { "" };
                 Line::from(vec![
                     Span::styled(fit(""), Style::default().bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(text), Style::default().fg(theme.foreground).bg(succ_bg)),
                 ])
             } else if let Some(text) = line.strip_prefix("--- ") {
                 let col = fit(text);
                 Line::from(vec![
-                    Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        col.clone(),
+                        Style::default().fg(theme.dimmed).bg(theme.background),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
                 ])
             } else if let Some(text) = line.strip_prefix("+++ ") {
                 let col = fit(text);
                 Line::from(vec![
-                    Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        col.clone(),
+                        Style::default().fg(theme.dimmed).bg(theme.background),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
                 ])
             } else if let Some(text) = line.strip_prefix(' ') {
-                    let col = fit(text);
-                    Line::from(vec![
-                        Span::styled(col.clone(), Style::default().fg(theme.dimmed).bg(theme.background)),
-                        Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
-                        Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
-                    ])
+                let col = fit(text);
+                Line::from(vec![
+                    Span::styled(
+                        col.clone(),
+                        Style::default().fg(theme.dimmed).bg(theme.background),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
+                    Span::styled(col, Style::default().fg(theme.dimmed).bg(theme.background)),
+                ])
             } else {
                 Line::from(vec![
-                    Span::styled(fit(line), Style::default().fg(theme.foreground).bg(theme.background)),
-                    Span::styled(" ▎ ".to_string(), Style::default().fg(theme.border).bg(theme.background)),
+                    Span::styled(
+                        fit(line),
+                        Style::default().fg(theme.foreground).bg(theme.background),
+                    ),
+                    Span::styled(
+                        " ▎ ".to_string(),
+                        Style::default().fg(theme.border).bg(theme.background),
+                    ),
                     Span::styled(fit(""), Style::default().bg(theme.background)),
                 ])
             }
@@ -184,11 +278,14 @@ pub fn render_diff_side_by_side(diff: &str, width: u16, theme: &Theme) -> Vec<Li
 pub fn render_diff_lines(diff: &str, theme: &Theme) -> Vec<Line<'static>> {
     let warn_bg = soften(theme.warning, theme.background, 0.25);
     let succ_bg = soften(theme.success, theme.background, 0.25);
-    
+
     diff.split('\n')
         .take(200)
         .map(|line| {
-            if line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("commit ") {
+            if line.starts_with("diff --git")
+                || line.starts_with("index ")
+                || line.starts_with("commit ")
+            {
                 // chars-based truncation: byte slicing at a fixed 120 could
                 // split a multi-byte UTF-8 sequence and panic.
                 let truncated: String = if line.chars().count() > 120 {
@@ -198,29 +295,67 @@ pub fn render_diff_lines(diff: &str, theme: &Theme) -> Vec<Line<'static>> {
                 };
                 Line::from(Span::styled(
                     truncated,
-                    Style::default().fg(theme.accent).bg(theme.background).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(theme.accent)
+                        .bg(theme.background)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else if line.starts_with("@@") {
-                Line::from(Span::styled(line.to_string(),
-                    Style::default().fg(theme.primary).bg(theme.surface).add_modifier(Modifier::BOLD)))
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default()
+                        .fg(theme.primary)
+                        .bg(theme.surface)
+                        .add_modifier(Modifier::BOLD),
+                ))
             } else if line.starts_with('+') && !line.starts_with("+++") {
-                let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                let rest = if line.len() > 1 {
+                    line[1..].to_string()
+                } else {
+                    String::new()
+                };
                 Line::from(vec![
-                    Span::styled("+".to_string(), Style::default().fg(theme.foreground).bg(succ_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "+".to_string(),
+                        Style::default()
+                            .fg(theme.foreground)
+                            .bg(succ_bg)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled(rest, Style::default().fg(theme.foreground).bg(succ_bg)),
                 ])
             } else if line.starts_with('-') && !line.starts_with("---") {
-                let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                let rest = if line.len() > 1 {
+                    line[1..].to_string()
+                } else {
+                    String::new()
+                };
                 Line::from(vec![
-                    Span::styled("-".to_string(), Style::default().fg(theme.foreground).bg(warn_bg).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "-".to_string(),
+                        Style::default()
+                            .fg(theme.foreground)
+                            .bg(warn_bg)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::styled(rest, Style::default().fg(theme.foreground).bg(warn_bg)),
                 ])
-            } else if line.starts_with("Author:") || line.starts_with("Date:") || line.starts_with("---") || line.starts_with("+++") {
-                Line::from(Span::styled(line.to_string(), Style::default().fg(theme.dimmed).bg(theme.background)))
+            } else if line.starts_with("Author:")
+                || line.starts_with("Date:")
+                || line.starts_with("---")
+                || line.starts_with("+++")
+            {
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(theme.dimmed).bg(theme.background),
+                ))
             } else if line.trim().is_empty() {
                 Line::from(Span::raw(""))
             } else {
-                Line::from(Span::styled(line.to_string(), Style::default().fg(theme.foreground).bg(theme.background)))
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(theme.foreground).bg(theme.background),
+                ))
             }
         })
         .collect()
@@ -289,29 +424,93 @@ pub fn draw_continuous_border(
     let top_w = area.width.saturating_sub(2);
     if top_w > 0 {
         let top_str = "─".repeat(top_w as usize);
-        f.render_widget(Paragraph::new(top_str).style(s_horiz), Rect { x: area.x + 1, y: area.y, width: top_w, height: 1 });
+        f.render_widget(
+            Paragraph::new(top_str).style(s_horiz),
+            Rect {
+                x: area.x + 1,
+                y: area.y,
+                width: top_w,
+                height: 1,
+            },
+        );
     }
 
     // Bottom border (using Horizontal line ─ U+2500, excluding corners)
     let bottom_w = area.width.saturating_sub(2);
     if bottom_w > 0 {
         let bottom_str = "─".repeat(bottom_w as usize);
-        f.render_widget(Paragraph::new(bottom_str).style(s_horiz), Rect { x: area.x + 1, y: area.y + area.height - 1, width: bottom_w, height: 1 });
+        f.render_widget(
+            Paragraph::new(bottom_str).style(s_horiz),
+            Rect {
+                x: area.x + 1,
+                y: area.y + area.height - 1,
+                width: bottom_w,
+                height: 1,
+            },
+        );
     }
 
     // Left & Right borders (using ASCII vertical bar |)
     for row in 1..area.height.saturating_sub(1) {
         let y = area.y + row;
-        f.render_widget(Paragraph::new("|").style(s_vert), Rect { x: area.x, y, width: 1, height: 1 });
-        f.render_widget(Paragraph::new("|").style(s_vert), Rect { x: area.x + area.width - 1, y, width: 1, height: 1 });
+        f.render_widget(
+            Paragraph::new("|").style(s_vert),
+            Rect {
+                x: area.x,
+                y,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new("|").style(s_vert),
+            Rect {
+                x: area.x + area.width - 1,
+                y,
+                width: 1,
+                height: 1,
+            },
+        );
     }
 
     // Corners
     if area.width > 0 && area.height > 0 {
-        f.render_widget(Paragraph::new(tl).style(s_vert), Rect { x: area.x, y: area.y, width: 1, height: 1 });
-        f.render_widget(Paragraph::new(tr).style(s_vert), Rect { x: area.x + area.width - 1, y: area.y, width: 1, height: 1 });
-        f.render_widget(Paragraph::new(bl).style(s_vert), Rect { x: area.x, y: area.y + area.height - 1, width: 1, height: 1 });
-        f.render_widget(Paragraph::new(br).style(s_vert), Rect { x: area.x + area.width - 1, y: area.y + area.height - 1, width: 1, height: 1 });
+        f.render_widget(
+            Paragraph::new(tl).style(s_vert),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(tr).style(s_vert),
+            Rect {
+                x: area.x + area.width - 1,
+                y: area.y,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(bl).style(s_vert),
+            Rect {
+                x: area.x,
+                y: area.y + area.height - 1,
+                width: 1,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(br).style(s_vert),
+            Rect {
+                x: area.x + area.width - 1,
+                y: area.y + area.height - 1,
+                width: 1,
+                height: 1,
+            },
+        );
     }
 
     // Title overlay (centered or left-aligned on the top border)
@@ -321,7 +520,12 @@ pub fn draw_continuous_border(
             let tx = area.x + 2; // pad 2 cells from left
             f.render_widget(
                 Paragraph::new(title).style(title_style),
-                Rect { x: tx, y: area.y, width: tw, height: 1 }
+                Rect {
+                    x: tx,
+                    y: area.y,
+                    width: tw,
+                    height: 1,
+                },
             );
         }
     }

@@ -7,14 +7,14 @@
 // ui/modals.rs    → Modal windows (setup, theme, help)
 // ui/events.rs    → Keyboard & mouse event handlers
 
-pub mod state;
-pub mod rendering;
-pub mod modals;
 pub mod events;
+pub mod modals;
+pub mod rendering;
+pub mod state;
 
-pub use state::AppState;
-pub use rendering::draw_ui;
 pub use events::{handle_key_event, handle_mouse_click, handle_mouse_scroll};
+pub use rendering::draw_ui;
+pub use state::AppState;
 
 use std::io;
 use std::time::{Duration, Instant};
@@ -22,36 +22,53 @@ use std::time::{Duration, Instant};
 use crossterm::{
     event::{self, Event, KeyCode, KeyModifiers, MouseButton, MouseEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
+use ratatui::{Terminal, backend::CrosstermBackend};
 
 /// Launch the TUI application
 pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
-    if debug { crate::log::log_debug("TUI: Enabling raw mode"); }
+    if debug {
+        crate::log::log_debug("TUI: Enabling raw mode");
+    }
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    if debug { crate::log::log_debug("TUI: Entering alternate screen"); }
+    if debug {
+        crate::log::log_debug("TUI: Entering alternate screen");
+    }
     execute!(
         stdout,
         EnterAlternateScreen,
         crossterm::event::EnableMouseCapture
     )?;
     let backend = CrosstermBackend::new(stdout);
-    if debug { crate::log::log_debug("TUI: Creating terminal"); }
+    if debug {
+        crate::log::log_debug("TUI: Creating terminal");
+    }
     let mut terminal = Terminal::new(backend)?;
 
-    if debug { crate::log::log_debug("TUI: Creating AppState"); }
+    if debug {
+        crate::log::log_debug("TUI: Creating AppState");
+    }
     let mut state = AppState::new();
     // Check for updates before entering the event loop. This is a
     // synchronous git ls-remote call that takes ~300-800ms on a good
     // network; if it fails (no network, no tags), it's silently ignored.
-    if debug { crate::log::log_debug("TUI: Checking for updates"); }
+    if debug {
+        crate::log::log_debug("TUI: Checking for updates");
+    }
     state.check_for_updates();
     let (tx, rx) = std::sync::mpsc::channel::<state::TuiMessage>();
     state.tx = Some(tx);
-    
-    if debug { crate::log::log_debug(&format!("TUI: AppState created, is_git_repo={}, files={}, commits={}", state.is_git_repo, state.files.len(), state.commits.len())); }
+
+    if debug {
+        crate::log::log_debug(&format!(
+            "TUI: AppState created, is_git_repo={}, files={}, commits={}",
+            state.is_git_repo,
+            state.files.len(),
+            state.commits.len()
+        ));
+    }
 
     let mut frame_count: u64 = 0;
     let mut last_check = Instant::now();
@@ -59,11 +76,15 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
     loop {
         frame_count += 1;
 
-        if debug && frame_count == 1 { crate::log::log_debug("TUI: First draw starting"); }
+        if debug && frame_count == 1 {
+            crate::log::log_debug("TUI: First draw starting");
+        }
         terminal.draw(|f| {
             draw_ui(f, &mut state);
         })?;
-        if debug && frame_count == 1 { crate::log::log_debug("TUI: First draw completed"); }
+        if debug && frame_count == 1 {
+            crate::log::log_debug("TUI: First draw completed");
+        }
 
         // Periodic git change detection (every 2 seconds) - only if not running a command
         if !state.console_running && last_check.elapsed() >= Duration::from_secs(2) {
@@ -80,7 +101,9 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
         // TUI with a raw error mid-stream).
         let mut got_output = false;
         let mut drained = 0usize;
-        while drained < 64 && let Ok(msg) = rx.try_recv() {
+        while drained < 64
+            && let Ok(msg) = rx.try_recv()
+        {
             drained += 1;
             match msg {
                 state::TuiMessage::ConsoleOutput(out) => {
@@ -99,11 +122,9 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
                     state.console_running = false;
                     match res {
                         Ok(_) => {
-                            state.status_message = crate::i18n::translate(
-                                &state.language,
-                                "status_success",
-                            )
-                            .into_owned();
+                            state.status_message =
+                                crate::i18n::translate(&state.language, "status_success")
+                                    .into_owned();
                         }
                         Err(e) => {
                             state.status_message = format!("Error: {}", e);
@@ -128,7 +149,8 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // Poll for askpass prompt from helper process
-        let prompt_path = std::env::temp_dir().join(format!("git-hero-askpass-prompt-{}.txt", state.session_id));
+        let prompt_path =
+            std::env::temp_dir().join(format!("git-hero-askpass-prompt-{}.txt", state.session_id));
         if prompt_path.exists()
             && let Ok(prompt) = std::fs::read_to_string(&prompt_path)
         {
@@ -138,7 +160,10 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
             state.credentials_input.clear();
             state.credentials_cursor = 0;
             let lower = state.credentials_prompt.to_lowercase();
-            state.credentials_mask = lower.contains("password") || lower.contains("passphrase") || lower.contains("token") || lower.contains("clave");
+            state.credentials_mask = lower.contains("password")
+                || lower.contains("passphrase")
+                || lower.contains("token")
+                || lower.contains("clave");
         }
 
         if event::poll(Duration::from_millis(100))? {

@@ -69,7 +69,10 @@ mod tests {
     #[test]
     fn tables_have_the_same_keys() {
         for key in ICONS_NERD.keys() {
-            assert!(ICONS_ASCII.contains_key(key), "ASCII table is missing key: {key}");
+            assert!(
+                ICONS_ASCII.contains_key(key),
+                "ASCII table is missing key: {key}"
+            );
         }
     }
 }

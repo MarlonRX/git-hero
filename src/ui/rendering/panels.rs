@@ -1,16 +1,19 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, List, ListItem, Paragraph, BorderType},
-    Frame,
+    widgets::{BorderType, Clear, List, ListItem, Paragraph},
 };
 
+use super::components::{draw_continuous_border, draw_solid_border, short_path, soften};
 use crate::ui::state::{AppState, GitCommit};
-use super::components::{draw_solid_border, draw_continuous_border, soften, short_path};
 
 pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
-    f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
+    f.render_widget(
+        Paragraph::new("").style(Style::default().bg(s.theme.background)),
+        body,
+    );
 
     let pa = Rect {
         x: body.x + 1,
@@ -24,71 +27,138 @@ pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
         f,
         pa,
         " ⚠ No Git Repository Detected ",
-        Style::default().fg(s.theme.warning).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(s.theme.warning)
+            .add_modifier(Modifier::BOLD),
         s.theme.primary,
         s.theme.background,
         BorderType::Rounded,
     );
 
-    let inner_pa = Rect { x: pa.x + 1, y: pa.y + 1, width: pa.width.saturating_sub(2), height: pa.height.saturating_sub(2) };
-    f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), inner_pa);
+    let inner_pa = Rect {
+        x: pa.x + 1,
+        y: pa.y + 1,
+        width: pa.width.saturating_sub(2),
+        height: pa.height.saturating_sub(2),
+    };
+    f.render_widget(
+        Paragraph::new("").style(Style::default().bg(s.theme.background)),
+        inner_pa,
+    );
 
     let cy = pa.y + 3;
 
     f.render_widget(
         Paragraph::new("This directory is not inside a Git repository.")
             .alignment(Alignment::Center)
-            .style(Style::default().fg(s.theme.warning).bg(s.theme.background).add_modifier(Modifier::BOLD)),
-        Rect { x: pa.x + 2, y: cy, width: pa.width - 4, height: 1 },
+            .style(
+                Style::default()
+                    .fg(s.theme.warning)
+                    .bg(s.theme.background)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        Rect {
+            x: pa.x + 2,
+            y: cy,
+            width: pa.width - 4,
+            height: 1,
+        },
     );
 
     f.render_widget(
         Paragraph::new(format!(" \u{1F4C1} Current path:  {}", short_path(&s.cwd)))
             .alignment(Alignment::Center)
-            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
-        Rect { x: pa.x + 2, y: cy + 2, width: pa.width - 4, height: 1 },
+            .style(
+                Style::default()
+                    .fg(s.theme.foreground)
+                    .bg(s.theme.background),
+            ),
+        Rect {
+            x: pa.x + 2,
+            y: cy + 2,
+            width: pa.width - 4,
+            height: 1,
+        },
     );
 
     f.render_widget(
         Paragraph::new("\u{2501} Options \u{2501}")
             .alignment(Alignment::Center)
-            .style(Style::default().fg(s.theme.accent).bg(s.theme.background).add_modifier(Modifier::BOLD)),
-        Rect { x: pa.x + 2, y: cy + 5, width: pa.width - 4, height: 1 },
+            .style(
+                Style::default()
+                    .fg(s.theme.accent)
+                    .bg(s.theme.background)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        Rect {
+            x: pa.x + 2,
+            y: cy + 5,
+            width: pa.width - 4,
+            height: 1,
+        },
     );
 
     let opt1 = "\u{2776} Initialize Git repository here";
     let opt2 = "\u{2777} Change Directory (/cd <path>)";
 
     let o1s = if s.init_cursor == 0 {
-        Style::default().bg(s.theme.primary).fg(s.theme.background).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(s.theme.primary)
+            .fg(s.theme.background)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(s.theme.foreground).bg(s.theme.surface)
     };
     let o2s = if s.init_cursor == 1 {
-        Style::default().bg(s.theme.primary).fg(s.theme.background).add_modifier(Modifier::BOLD)
+        Style::default()
+            .bg(s.theme.primary)
+            .fg(s.theme.background)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(s.theme.foreground).bg(s.theme.surface)
     };
 
     f.render_widget(
-        Paragraph::new(format!("  {}  ", opt1)).alignment(Alignment::Center).style(o1s),
-        Rect { x: pa.x + 4, y: cy + 7, width: pa.width - 8, height: 1 },
+        Paragraph::new(format!("  {}  ", opt1))
+            .alignment(Alignment::Center)
+            .style(o1s),
+        Rect {
+            x: pa.x + 4,
+            y: cy + 7,
+            width: pa.width - 8,
+            height: 1,
+        },
     );
     f.render_widget(
-        Paragraph::new(format!("  {}  ", opt2)).alignment(Alignment::Center).style(o2s),
-        Rect { x: pa.x + 4, y: cy + 9, width: pa.width - 8, height: 1 },
+        Paragraph::new(format!("  {}  ", opt2))
+            .alignment(Alignment::Center)
+            .style(o2s),
+        Rect {
+            x: pa.x + 4,
+            y: cy + 9,
+            width: pa.width - 8,
+            height: 1,
+        },
     );
 
     f.render_widget(
         Paragraph::new("Arrow keys / Enter / Click to select")
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
-        Rect { x: pa.x + 2, y: cy + 12, width: pa.width - 4, height: 1 },
+        Rect {
+            x: pa.x + 2,
+            y: cy + 12,
+            width: pa.width - 4,
+            height: 1,
+        },
     );
 }
 
 pub fn draw_init_wizard(f: &mut Frame, s: &mut AppState, body: Rect) {
-    f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
+    f.render_widget(
+        Paragraph::new("").style(Style::default().bg(s.theme.background)),
+        body,
+    );
 
     let pa = Rect {
         x: body.x + 1,
@@ -103,20 +173,38 @@ pub fn draw_init_wizard(f: &mut Frame, s: &mut AppState, body: Rect) {
         f,
         pa,
         &title,
-        Style::default().fg(s.theme.accent).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(s.theme.accent)
+            .add_modifier(Modifier::BOLD),
         s.theme.primary,
         s.theme.background,
         BorderType::Rounded,
     );
 
-    let inner = Rect { x: pa.x + 1, y: pa.y + 1, width: pa.width.saturating_sub(2), height: pa.height.saturating_sub(2) };
-    f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), inner);
+    let inner = Rect {
+        x: pa.x + 1,
+        y: pa.y + 1,
+        width: pa.width.saturating_sub(2),
+        height: pa.height.saturating_sub(2),
+    };
+    f.render_widget(
+        Paragraph::new("").style(Style::default().bg(s.theme.background)),
+        inner,
+    );
 
     let cy = pa.y + 2;
     f.render_widget(
-        Paragraph::new(lines.join("\n"))
-            .style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
-        Rect { x: pa.x + 2, y: cy, width: pa.width - 4, height: pa.height - 4 },
+        Paragraph::new(lines.join("\n")).style(
+            Style::default()
+                .fg(s.theme.foreground)
+                .bg(s.theme.background),
+        ),
+        Rect {
+            x: pa.x + 2,
+            y: cy,
+            width: pa.width - 4,
+            height: pa.height - 4,
+        },
     );
 }
 
@@ -128,7 +216,10 @@ fn wizard_content(s: &AppState) -> (String, Vec<String>) {
         1 => {
             lines.push("Choose default branch name:".to_string());
             lines.push(String::new());
-            for (i, o) in ["main", "master", "Custom (type name below)"].iter().enumerate() {
+            for (i, o) in ["main", "master", "Custom (type name below)"]
+                .iter()
+                .enumerate()
+            {
                 if i == s.init_cursor {
                     lines.push(format!("   \u{25B6} [{}] {}", i + 1, o));
                 } else {
@@ -150,7 +241,11 @@ fn wizard_content(s: &AppState) -> (String, Vec<String>) {
         }
         3 => {
             title = " Git Init - Step 3/3 ".to_string();
-            let remote = if s.init_remote_url.is_empty() { "None" } else { &s.init_remote_url };
+            let remote = if s.init_remote_url.is_empty() {
+                "None"
+            } else {
+                &s.init_remote_url
+            };
             lines.push("Review initialization details:".to_string());
             lines.push(String::new());
             lines.push(format!("   \u{1F4C1} Path:   {}", short_path(&s.cwd)));
@@ -171,7 +266,10 @@ fn wizard_content(s: &AppState) -> (String, Vec<String>) {
 }
 
 pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
-    f.render_widget(Paragraph::new("").style(Style::default().bg(s.theme.background)), body);
+    f.render_widget(
+        Paragraph::new("").style(Style::default().bg(s.theme.background)),
+        body,
+    );
 
     if body.width < 50 {
         draw_compact(f, s, body, 0);
@@ -192,11 +290,19 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
 
     let files_area = sidebar;
     let files_title = format!(" FILES ({}) ", s.files.len());
-    let border_color = if s.focus_pane == "files" { s.theme.primary } else { s.theme.border };
-    let title_style = if s.focus_pane == "files" {
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD)
+    let border_color = if s.focus_pane == "files" {
+        s.theme.primary
     } else {
-        Style::default().fg(s.theme.foreground).add_modifier(Modifier::BOLD)
+        s.theme.border
+    };
+    let title_style = if s.focus_pane == "files" {
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(s.theme.foreground)
+            .add_modifier(Modifier::BOLD)
     };
     draw_continuous_border(
         f,
@@ -217,7 +323,12 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     if s.files.is_empty() {
         let clean = "\u{2713} Working directory clean";
         f.render_widget(
-            Paragraph::new(clean).style(Style::default().fg(s.theme.success).bg(s.theme.background).add_modifier(Modifier::BOLD)),
+            Paragraph::new(clean).style(
+                Style::default()
+                    .fg(s.theme.success)
+                    .bg(s.theme.background)
+                    .add_modifier(Modifier::BOLD),
+            ),
             files_inner,
         );
     } else {
@@ -225,7 +336,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         let mut modified_count = 0;
         let mut deleted_count = 0;
         let mut untracked_count = 0;
-        
+
         for file in &s.files {
             match file.status.as_str() {
                 "A" => added_count += 1,
@@ -235,7 +346,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
                 _ => {}
             }
         }
-        
+
         let mut indicators = Vec::new();
         if added_count > 0 {
             indicators.push(format!("{}{}", s.get_icon_str("add"), added_count));
@@ -247,63 +358,98 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             indicators.push(format!("{}{}", s.get_icon_str("del"), deleted_count));
         }
         if untracked_count > 0 {
-            indicators.push(format!("{}{}", s.get_icon_str("untracked"), untracked_count));
+            indicators.push(format!(
+                "{}{}",
+                s.get_icon_str("untracked"),
+                untracked_count
+            ));
         }
-        
+
         let indicator_text = if indicators.is_empty() {
             String::new()
         } else {
             format!(" [{}] ", indicators.join(" "))
         };
-        
-        let items: Vec<ListItem> = s.flat_entries.iter().enumerate().map(|(i, entry)| {
-            let pre = if i == s.flat_idx && s.focus_pane == "files" { "\u{25B6} " } else { "  " };
-            let fi = entry.file_idx;
 
-            let f = &s.files[fi];
-            let fg = if f.staged { s.theme.success } else if f.status == "??" { s.theme.dimmed } else { s.theme.warning };
-            let cb = if f.staged { "[\u{2713}]" } else { "[ ]" };
-            
-            let (icon, icon_color) = match f.status.as_str() {
-                "A" => (s.get_icon_str("add"), s.theme.success),
-                "D" => (s.get_icon_str("del"), s.theme.warning),
-                "??" => (s.get_icon_str("untracked"), s.theme.dimmed),
-                "M" | "MM" => (s.get_icon_str("mod"), s.theme.accent),
-                _ => (s.get_icon_str("mod"), fg),
-            };
-            
-            let style = if i == s.flat_idx && s.focus_pane == "files" {
-                Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(fg).bg(s.theme.background)
-            };
-            
-            let line = Line::from(vec![
-                Span::raw(pre),
-                Span::styled(cb, Style::default().fg(if f.staged { s.theme.success } else { s.theme.dimmed }).bg(s.theme.background)),
-                Span::raw(" "),
-                Span::styled(icon, Style::default().fg(icon_color).bg(s.theme.background)),
-                Span::raw(" "),
-                Span::styled(&f.path, style),
-            ]);
-            
-            ListItem::new(line)
-        }).collect();
-        
+        let items: Vec<ListItem> = s
+            .flat_entries
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| {
+                let pre = if i == s.flat_idx && s.focus_pane == "files" {
+                    "\u{25B6} "
+                } else {
+                    "  "
+                };
+                let fi = entry.file_idx;
+
+                let f = &s.files[fi];
+                let fg = if f.staged {
+                    s.theme.success
+                } else if f.status == "??" {
+                    s.theme.dimmed
+                } else {
+                    s.theme.warning
+                };
+                let cb = if f.staged { "[\u{2713}]" } else { "[ ]" };
+
+                let (icon, icon_color) = match f.status.as_str() {
+                    "A" => (s.get_icon_str("add"), s.theme.success),
+                    "D" => (s.get_icon_str("del"), s.theme.warning),
+                    "??" => (s.get_icon_str("untracked"), s.theme.dimmed),
+                    "M" | "MM" => (s.get_icon_str("mod"), s.theme.accent),
+                    _ => (s.get_icon_str("mod"), fg),
+                };
+
+                let style = if i == s.flat_idx && s.focus_pane == "files" {
+                    Style::default()
+                        .bg(s.theme.highlight)
+                        .fg(s.theme.on_highlight)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(fg).bg(s.theme.background)
+                };
+
+                let line = Line::from(vec![
+                    Span::raw(pre),
+                    Span::styled(
+                        cb,
+                        Style::default()
+                            .fg(if f.staged {
+                                s.theme.success
+                            } else {
+                                s.theme.dimmed
+                            })
+                            .bg(s.theme.background),
+                    ),
+                    Span::raw(" "),
+                    Span::styled(icon, Style::default().fg(icon_color).bg(s.theme.background)),
+                    Span::raw(" "),
+                    Span::styled(&f.path, style),
+                ]);
+
+                ListItem::new(line)
+            })
+            .collect();
+
         let all_items = if !indicator_text.is_empty() {
-            let mut all = vec![ListItem::new(
-                Line::from(Span::styled(
-                    indicator_text.trim(),
-                    Style::default().fg(s.theme.dimmed).bg(s.theme.background).add_modifier(Modifier::BOLD)
-                ))
-            )];
+            let mut all = vec![ListItem::new(Line::from(Span::styled(
+                indicator_text.trim(),
+                Style::default()
+                    .fg(s.theme.dimmed)
+                    .bg(s.theme.background)
+                    .add_modifier(Modifier::BOLD),
+            )))];
             all.extend(items);
             all
         } else {
             items
         };
-        
-        f.render_widget(List::new(all_items).style(Style::default().bg(s.theme.background)), files_inner);
+
+        f.render_widget(
+            List::new(all_items).style(Style::default().bg(s.theme.background)),
+            files_inner,
+        );
     }
 
     // ── Right panel: DIFF + COMMITS ────────────────────────────────
@@ -319,22 +465,40 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
 
     let diff_area = right_chunks[0];
     let mut diff_title = " DIFF ".to_string();
-    if s.focus_pane == "commits" && !s.commits.is_empty() && s.selected_commit_idx < s.commits.len() {
+    if s.focus_pane == "commits" && !s.commits.is_empty() && s.selected_commit_idx < s.commits.len()
+    {
         diff_title = " FILES CHANGED ".to_string();
     } else if !s.files.is_empty() && s.selected_file_idx < s.files.len() {
         let file_label = &s.files[s.selected_file_idx].path;
-        diff_title = format!(" {} DIFF: {} {} ", 
-            if s.focus_pane == "diff" { "\u{25BC}" } else { "" },
+        diff_title = format!(
+            " {} DIFF: {} {} ",
+            if s.focus_pane == "diff" {
+                "\u{25BC}"
+            } else {
+                ""
+            },
             file_label,
-            if s.focus_pane == "diff" { "\u{25BC}" } else { "" },
+            if s.focus_pane == "diff" {
+                "\u{25BC}"
+            } else {
+                ""
+            },
         );
     }
     let diff_title_style = if s.focus_pane == "diff" {
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(s.theme.accent).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(s.theme.accent)
+            .add_modifier(Modifier::BOLD)
     };
-    let border_color = if s.focus_pane == "diff" { s.theme.primary } else { s.theme.border };
+    let border_color = if s.focus_pane == "diff" {
+        s.theme.primary
+    } else {
+        s.theme.border
+    };
     draw_continuous_border(
         f,
         diff_area,
@@ -352,12 +516,16 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     };
 
     let dlines = s.get_cached_diff_lines(diff_inner.width);
-    let visible: Vec<Line> = dlines.iter()
+    let visible: Vec<Line> = dlines
+        .iter()
         .skip(s.diff_scroll_offset)
         .take(diff_inner.height as usize)
         .cloned()
         .collect();
-    f.render_widget(Paragraph::new(visible).style(Style::default().bg(s.theme.background)), diff_inner);
+    f.render_widget(
+        Paragraph::new(visible).style(Style::default().bg(s.theme.background)),
+        diff_inner,
+    );
 
     let commit_area = right_chunks[1];
     let commits_title = if s.show_commit_detail {
@@ -365,11 +533,19 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     } else {
         " COMMITS (Enter for details) ".to_string()
     };
-    let border_color = if s.focus_pane == "commits" { s.theme.primary } else { s.theme.border };
-    let title_style = if s.focus_pane == "commits" {
-        Style::default().fg(s.theme.primary).add_modifier(Modifier::BOLD)
+    let border_color = if s.focus_pane == "commits" {
+        s.theme.primary
     } else {
-        Style::default().fg(s.theme.foreground).add_modifier(Modifier::BOLD)
+        s.theme.border
+    };
+    let title_style = if s.focus_pane == "commits" {
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(s.theme.foreground)
+            .add_modifier(Modifier::BOLD)
     };
     draw_continuous_border(
         f,
@@ -397,36 +573,93 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         let commit_theme = s.theme;
         let c_warn = soften(commit_theme.warning, commit_theme.background, 0.25);
         let c_succ = soften(commit_theme.success, commit_theme.background, 0.25);
-        let detail_lines: Vec<Line> = s.commit_detail_diff.split('\n')
+        let detail_lines: Vec<Line> = s
+            .commit_detail_diff
+            .split('\n')
             .skip(s.commit_detail_scroll)
             .take(commits_inner.height as usize)
             .map(|line| {
                 if line.starts_with("commit ") {
-                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.accent).bg(commit_theme.background).add_modifier(Modifier::BOLD)))
+                    Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default()
+                            .fg(commit_theme.accent)
+                            .bg(commit_theme.background)
+                            .add_modifier(Modifier::BOLD),
+                    ))
                 } else if line.starts_with("@@") {
-                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.primary).bg(commit_theme.surface).add_modifier(Modifier::BOLD)))
+                    Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default()
+                            .fg(commit_theme.primary)
+                            .bg(commit_theme.surface)
+                            .add_modifier(Modifier::BOLD),
+                    ))
                 } else if line.starts_with('+') && !line.starts_with("+++") {
-                    let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                    let rest = if line.len() > 1 {
+                        line[1..].to_string()
+                    } else {
+                        String::new()
+                    };
                     Line::from(vec![
-                        Span::styled("+".to_string(), Style::default().fg(commit_theme.foreground).bg(c_succ).add_modifier(Modifier::BOLD)),
-                        Span::styled(rest, Style::default().fg(commit_theme.foreground).bg(c_succ)),
+                        Span::styled(
+                            "+".to_string(),
+                            Style::default()
+                                .fg(commit_theme.foreground)
+                                .bg(c_succ)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            rest,
+                            Style::default().fg(commit_theme.foreground).bg(c_succ),
+                        ),
                     ])
                 } else if line.starts_with('-') && !line.starts_with("---") {
-                    let rest = if line.len() > 1 { line[1..].to_string() } else { String::new() };
+                    let rest = if line.len() > 1 {
+                        line[1..].to_string()
+                    } else {
+                        String::new()
+                    };
                     Line::from(vec![
-                        Span::styled("-".to_string(), Style::default().fg(commit_theme.foreground).bg(c_warn).add_modifier(Modifier::BOLD)),
-                        Span::styled(rest, Style::default().fg(commit_theme.foreground).bg(c_warn)),
+                        Span::styled(
+                            "-".to_string(),
+                            Style::default()
+                                .fg(commit_theme.foreground)
+                                .bg(c_warn)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            rest,
+                            Style::default().fg(commit_theme.foreground).bg(c_warn),
+                        ),
                     ])
-                } else if line.starts_with("Author:") || line.starts_with("Date:") || line.starts_with("---") || line.starts_with("+++") {
-                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.dimmed).bg(commit_theme.background)))
+                } else if line.starts_with("Author:")
+                    || line.starts_with("Date:")
+                    || line.starts_with("---")
+                    || line.starts_with("+++")
+                {
+                    Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default()
+                            .fg(commit_theme.dimmed)
+                            .bg(commit_theme.background),
+                    ))
                 } else if line.trim().is_empty() {
                     Line::from(Span::raw(""))
                 } else {
-                    Line::from(Span::styled(line.to_string(), Style::default().fg(commit_theme.foreground).bg(commit_theme.background)))
+                    Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default()
+                            .fg(commit_theme.foreground)
+                            .bg(commit_theme.background),
+                    ))
                 }
             })
             .collect();
-        f.render_widget(Paragraph::new(detail_lines).style(Style::default().bg(s.theme.background)), commits_inner);
+        f.render_widget(
+            Paragraph::new(detail_lines).style(Style::default().bg(s.theme.background)),
+            commits_inner,
+        );
     } else {
         // Phase 4.11: O(n) slice + O(1) per-item index lookup. The previous
         // version did `s.commits.iter().position(|c| c.hash == c.hash)` per
@@ -435,43 +668,62 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         let end = (start + commits_inner.height as usize).min(s.commits.len());
         let visible: &[GitCommit] = &s.commits[start..end];
 
-        let items: Vec<ListItem> = visible.iter().enumerate().map(|(i, c)| {
-            let actual_idx = start + i;
-            let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
-            let subj = truncate_subject(&c.subject, right.width.saturating_sub(36) as usize);
+        let items: Vec<ListItem> = visible
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let actual_idx = start + i;
+                let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
+                    "\u{25B6} "
+                } else {
+                    "  "
+                };
+                let subj = truncate_subject(&c.subject, right.width.saturating_sub(36) as usize);
 
-            let push_icon = if c.pushed { "\u{2713}" } else { "\u{21C8}" };
-            let push_style = if c.pushed {
-                Style::default().fg(s.theme.success)
-            } else {
-                Style::default().fg(s.theme.warning).add_modifier(Modifier::BOLD)
-            };
+                let push_icon = if c.pushed { "\u{2713}" } else { "\u{21C8}" };
+                let push_style = if c.pushed {
+                    Style::default().fg(s.theme.success)
+                } else {
+                    Style::default()
+                        .fg(s.theme.warning)
+                        .add_modifier(Modifier::BOLD)
+                };
 
-            let item_s = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
-                Style::default().bg(s.theme.highlight).fg(s.theme.on_highlight).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().bg(s.theme.background)
-            };
+                let item_s = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
+                    Style::default()
+                        .bg(s.theme.highlight)
+                        .fg(s.theme.on_highlight)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().bg(s.theme.background)
+                };
 
-            let line = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
-                Line::from(vec![
-                    Span::raw(format!("{}{}", pre, c.hash)),
-                    Span::raw(format!("  ({})", c.date)),
-                    Span::raw(format!("  {}", subj)),
-                    Span::raw(format!("  {}", push_icon)),
-                ])
-            } else {
-                Line::from(vec![
-                    Span::raw(pre),
-                    Span::styled(&c.hash, Style::default().fg(s.theme.accent)),
-                    Span::styled(format!("  ({})", c.date), Style::default().fg(s.theme.dimmed)),
-                    Span::raw(format!("  {}", subj)),
-                    Span::styled(format!("  {}", push_icon), push_style),
-                ])
-            };
-            ListItem::new(line).style(item_s)
-        }).collect();
-        f.render_widget(List::new(items).style(Style::default().bg(s.theme.background)), commits_inner);
+                let line = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" {
+                    Line::from(vec![
+                        Span::raw(format!("{}{}", pre, c.hash)),
+                        Span::raw(format!("  ({})", c.date)),
+                        Span::raw(format!("  {}", subj)),
+                        Span::raw(format!("  {}", push_icon)),
+                    ])
+                } else {
+                    Line::from(vec![
+                        Span::raw(pre),
+                        Span::styled(&c.hash, Style::default().fg(s.theme.accent)),
+                        Span::styled(
+                            format!("  ({})", c.date),
+                            Style::default().fg(s.theme.dimmed),
+                        ),
+                        Span::raw(format!("  {}", subj)),
+                        Span::styled(format!("  {}", push_icon), push_style),
+                    ])
+                };
+                ListItem::new(line).style(item_s)
+            })
+            .collect();
+        f.render_widget(
+            List::new(items).style(Style::default().bg(s.theme.background)),
+            commits_inner,
+        );
     }
 }
 
@@ -507,7 +759,11 @@ fn draw_compact(f: &mut Frame, s: &mut AppState, body: Rect, header_h: u16) {
         Line::from(format!("Files:  {} modified files", s.files.len())),
     ];
     f.render_widget(
-        Paragraph::new(lines).style(Style::default().fg(s.theme.foreground).bg(s.theme.background)),
+        Paragraph::new(lines).style(
+            Style::default()
+                .fg(s.theme.foreground)
+                .bg(s.theme.background),
+        ),
         pa,
     );
 }
@@ -517,14 +773,23 @@ pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
     let cw = (area.width * 80 / 100).min(100);
     let cx = (area.width.saturating_sub(cw)) / 2;
     let cy = area.height.saturating_sub(ch + 1);
-    let car = Rect { x: cx, y: cy, width: cw, height: ch + 1 };
+    let car = Rect {
+        x: cx,
+        y: cy,
+        width: cw,
+        height: ch + 1,
+    };
 
     let fill_bg = s.theme.surface;
     for row in car.y..car.y + car.height {
         f.render_widget(
-            Paragraph::new(" ".repeat(car.width as usize))
-                .style(Style::default().bg(fill_bg)),
-            Rect { x: car.x, y: row, width: car.width, height: 1 },
+            Paragraph::new(" ".repeat(car.width as usize)).style(Style::default().bg(fill_bg)),
+            Rect {
+                x: car.x,
+                y: row,
+                width: car.width,
+                height: 1,
+            },
         );
     }
 
@@ -545,7 +810,12 @@ pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
                     .bg(s.theme.primary)
                     .add_modifier(Modifier::BOLD),
             ),
-            Rect { x: tx, y: car.y, width: tw, height: 1 },
+            Rect {
+                x: tx,
+                y: car.y,
+                width: tw,
+                height: 1,
+            },
         );
     }
 
@@ -558,8 +828,7 @@ pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
 
     if s.console_output.is_empty() {
         f.render_widget(
-            Paragraph::new("(no output)")
-                .style(Style::default().fg(s.theme.dimmed).bg(fill_bg)),
+            Paragraph::new("(no output)").style(Style::default().fg(s.theme.dimmed).bg(fill_bg)),
             inner,
         );
         return;
@@ -598,7 +867,10 @@ pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
                         .bg(fill_bg)
                         .add_modifier(Modifier::BOLD),
                 ))
-            } else if line.starts_with("error:") || line.starts_with("fatal:") || line.starts_with("Error") {
+            } else if line.starts_with("error:")
+                || line.starts_with("fatal:")
+                || line.starts_with("Error")
+            {
                 Line::from(Span::styled(
                     *line,
                     Style::default().fg(s.theme.warning).bg(fill_bg),

@@ -30,7 +30,10 @@ fn main() {
     println!("cargo:rustc-env=GIT_HERO_GIT_HASH={}", hash);
 
     // Dirty flag (uncommitted changes)
-    let dirty = if run_git(&["status", "--porcelain"]).map(|s| !s.is_empty()).unwrap_or(false) {
+    let dirty = if run_git(&["status", "--porcelain"])
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
         "1"
     } else {
         "0"

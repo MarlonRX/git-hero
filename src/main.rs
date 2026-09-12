@@ -1,10 +1,10 @@
+mod cli;
 mod config;
-mod theme;
-mod i18n;
 mod git;
 mod git_error;
+mod i18n;
 mod log;
-mod cli;
+mod theme;
 mod ui;
 mod version;
 
@@ -52,15 +52,19 @@ fn run_askpass_helper(args: &[String]) -> Result<(), Box<dyn std::error::Error>>
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    
+
     // Check if we are running as askpass helper
     if args.len() > 1 && args[1] == "--askpass-helper" {
         run_askpass_helper(&args)?;
         return Ok(());
     }
 
-    let is_cli = args.iter().any(|arg| arg == "-cli" || arg == "-c" || arg == "--cli");
-    let is_debug = args.iter().any(|arg| arg == "-debug" || arg == "-d" || arg == "--debug");
+    let is_cli = args
+        .iter()
+        .any(|arg| arg == "-cli" || arg == "-c" || arg == "--cli");
+    let is_debug = args
+        .iter()
+        .any(|arg| arg == "-debug" || arg == "-d" || arg == "--debug");
 
     // Clear debug log on startup
     if is_debug {
@@ -69,10 +73,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if is_cli {
-        if is_debug { log::log_debug("Running in CLI mode"); }
+        if is_debug {
+            log::log_debug("Running in CLI mode");
+        }
         cli::run_cli_flow()?;
     } else {
-        if is_debug { log::log_debug("Running in TUI mode"); }
+        if is_debug {
+            log::log_debug("Running in TUI mode");
+        }
         ui::run_tui(is_debug)?;
     }
 

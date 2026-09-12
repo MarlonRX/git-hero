@@ -264,7 +264,10 @@ mod tests {
 
     #[test]
     fn returns_english_for_unknown_lang() {
-        assert_eq!(translate("xx", "setup_title"), "Git Hero — First Time Setup");
+        assert_eq!(
+            translate("xx", "setup_title"),
+            "Git Hero — First Time Setup"
+        );
         assert_eq!(translate("", "setup_title"), "Git Hero — First Time Setup");
     }
 
@@ -307,14 +310,23 @@ mod tests {
 
     #[test]
     fn trf_substitutes_placeholders_left_to_right() {
-        assert_eq!(trf("en", "status_config_set_local", &["a.b", "c"]), "Config set: a.b = c");
+        assert_eq!(
+            trf("en", "status_config_set_local", &["a.b", "c"]),
+            "Config set: a.b = c"
+        );
         // Two placeholders with distinct args.
-        assert_eq!(trf("es", "status_config_get_global", &["k", "v"]), "Global: k = v");
+        assert_eq!(
+            trf("es", "status_config_get_global", &["k", "v"]),
+            "Global: k = v"
+        );
     }
 
     #[test]
     fn trf_with_no_args_is_passthrough() {
-        assert_eq!(trf("en", "status_success", &[]), "Operation completed successfully!");
+        assert_eq!(
+            trf("en", "status_success", &[]),
+            "Operation completed successfully!"
+        );
     }
 
     #[test]
