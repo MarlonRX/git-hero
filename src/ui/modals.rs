@@ -9,7 +9,6 @@ use ratatui::{
     Frame,
     layout::{Alignment, Rect},
     style::{Modifier, Style},
-    text::{Line, Span},
     widgets::Paragraph,
 };
 
@@ -550,7 +549,7 @@ pub(crate) const DOCS_LINES: &[&str] = &[
     "",
     "\u{2699} Other",
     "  t  /  /themes        Open visual theme picker",
-    "  g  /  /repos          Repository overview (branch, sync, dirty, age)",
+    "  g  /  /repos          Repo browser: recursive scan, type to filter",
     "  /remove-repo         Delete .git directory (asks confirmation)",
     "  /docs               This detailed reference",
     "  ?  /  /help          Quick shortcut help",
@@ -776,183 +775,7 @@ pub fn draw_confirm_remove_modal(f: &mut Frame, s: &mut AppState) {
     );
 }
 
-// ── Repo Overview Modal (multi-repo manager) ──────────────────────
-
-/// The repository-manager face of Git Hero: one row per sibling repo with
-/// branch, ahead/behind, dirty count and last-activity age, sorted newest
-/// first. Data comes from the on-demand scan in `state::repos`; this
-/// function only renders it.
-pub fn draw_repo_overview(f: &mut Frame, s: &mut AppState) {
-    let area = f.area();
-    let mw = 84u16.min(area.width.saturating_sub(4)).max(46);
-    let rows_wanted = s.repos.len().max(1) as u16;
-    let mh = (rows_wanted + 7).min(area.height.saturating_sub(4)).max(9);
-    let mx = (area.width.saturating_sub(mw)) / 2;
-    let my = (area.height.saturating_sub(mh)) / 2;
-    let modal = Rect {
-        x: mx,
-        y: my,
-        width: mw,
-        height: mh,
-    };
-
-    let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
-    draw_modal_title(
-        f,
-        modal,
-        &translate(&s.language, "repo_overview_title"),
-        s.theme.surface,
-        s.theme.accent,
-    );
-
-    // Summary: "X of Y repos have uncommitted changes".
-    let dirty = s.repo_dirty_count;
-    let summary = if s.repos.is_empty() {
-        translate(&s.language, "repo_overview_empty").into_owned()
-    } else {
-        trf(
-            &s.language,
-            "repo_overview_summary",
-            &[&dirty.to_string(), &s.repos.len().to_string()],
-        )
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                summary,
-                Style::default()
-                    .fg(if dirty > 0 {
-                        s.theme.warning
-                    } else {
-                        s.theme.success
-                    })
-                    .bg(s.theme.surface)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(
-                    "   {}",
-                    crate::ui::rendering::components::short_path(&s.repo_scan_root)
-                ),
-                Style::default().fg(s.theme.dimmed).bg(s.theme.surface),
-            ),
-        ])),
-        Rect {
-            x: inner.x + 1,
-            y: inner.y,
-            width: inner.width.saturating_sub(2),
-            height: 1,
-        },
-    );
-
-    // Rows window around the cursor.
-    let list_top = inner.y + 2;
-    let list_h = (inner.height.saturating_sub(4)).max(1) as usize;
-    let cur = s.repo_cursor.min(s.repos.len().saturating_sub(1));
-    let start = cur
-        .saturating_sub(list_h / 2)
-        .min(s.repos.len().saturating_sub(list_h));
-    let lines: Vec<Line> = s
-        .repos
-        .iter()
-        .enumerate()
-        .skip(start)
-        .take(list_h)
-        .map(|(i, e)| repo_overview_row(s, i, e))
-        .collect();
-    f.render_widget(
-        Paragraph::new(lines).style(Style::default().bg(s.theme.surface)),
-        Rect {
-            x: inner.x + 1,
-            y: list_top,
-            width: inner.width.saturating_sub(2),
-            height: list_h as u16,
-        },
-    );
-
-    let help = translate(&s.language, "repo_overview_help");
-    f.render_widget(
-        Paragraph::new(help)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
-        Rect {
-            x: inner.x,
-            y: inner.y + inner.height - 1,
-            width: inner.width,
-            height: 1,
-        },
-    );
-}
-
-/// One overview row: `▶ name  branch  ↑a ↓b  N files  age`.
-fn repo_overview_row(
-    s: &AppState,
-    idx: usize,
-    e: &crate::ui::state::repos::RepoEntry,
-) -> Line<'static> {
-    let selected = idx == s.repo_cursor;
-    let base = if selected {
-        Style::default()
-            .bg(s.theme.highlight)
-            .fg(s.theme.on_highlight)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().bg(s.theme.surface).fg(s.theme.foreground)
-    };
-    let dim = base.fg(if selected {
-        s.theme.on_highlight
-    } else {
-        s.theme.dimmed
-    });
-    let pre = if selected { "\u{25B6} " } else { "  " };
-    let age = if e.age.is_empty() {
-        // Repo without commits — show the localized "no commits" hint.
-        translate(&s.language, "repo_overview_no_commits").into_owned()
-    } else {
-        e.age.clone()
-    };
-    let changes = if e.dirty > 0 {
-        format!("{} \u{2731}", e.dirty)
-    } else {
-        "\u{2713}".to_string()
-    };
-    Line::from(vec![
-        Span::styled(
-            format!("{pre}{:<22}", truncate_one_line(&e.name, 21)),
-            base.add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!("{:<14}", truncate_one_line(&e.branch, 13)),
-            base.fg(if selected {
-                s.theme.on_highlight
-            } else {
-                s.theme.primary
-            }),
-        ),
-        Span::styled(format!("\u{2191}{} \u{2193}{} ", e.ahead, e.behind), dim),
-        Span::styled(
-            format!("{:<8}", changes),
-            base.fg(if selected {
-                s.theme.on_highlight
-            } else if e.dirty > 0 {
-                s.theme.warning
-            } else {
-                s.theme.success
-            }),
-        ),
-        Span::styled(age, dim),
-    ])
-}
-
-/// Single-line helper used by both overview columns' truncation.
-fn truncate_one_line(text: &str, max: usize) -> String {
-    let flat: String = text
-        .chars()
-        .map(|c| if c == '\n' { ' ' } else { c })
-        .take(max)
-        .collect();
-    flat
-}
+// ── Repo Overview moved to panels::draw_repo_browser (sidebar dropdown) ──
 
 // ── Credentials Input Modal ───────────────────────────────────────
 

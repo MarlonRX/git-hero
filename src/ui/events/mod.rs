@@ -50,12 +50,6 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
-    // ── Repo Overview (multi-repo manager) ───────────────────────
-    if s.show_repo_overview {
-        handle_repo_overview_key(code, s);
-        return true;
-    }
-
     // ── Setup Wizard ─────────────────────────────────────────────
     if s.setup_step > 0 {
         handle_setup_key(code, s);
@@ -87,6 +81,13 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
             }
             _ => {} // allow other keys to fall through and close modals etc.
         }
+    }
+
+    // ── Repo browser (sidebar dropdown; not a modal — but it owns
+    // keystrokes while open so typing becomes the filter) ─────────
+    if s.show_repo_overview {
+        handle_repo_overview_key(key, s);
+        return true;
     }
 
     // ── Help Modal ───────────────────────────────────────────────
@@ -183,6 +184,29 @@ pub fn handle_mouse_click(
         mouse_init_wizard(col, row, s, inner);
         return;
     }
+    // Repo browser (sidebar dropdown): clicking a row opens that repo;
+    // clicks in its chrome are swallowed. Hit-testing reuses the exact
+    // geometry helpers draw_dashboard paints with, so they cannot drift.
+    if s.show_repo_overview {
+        use crate::ui::rendering::body_area;
+        use crate::ui::rendering::panels::{browser_area, browser_rows_rect, browser_scroll};
+        let body = body_area(inner);
+        let area = browser_area(body, s.repo_view.len(), !s.is_git_repo);
+        let in_col = col > area.x && col < area.x + area.width.saturating_sub(1);
+        if in_col {
+            let (rows_top, rows_h) = browser_rows_rect(area);
+            let rel = row.saturating_sub(rows_top) as usize;
+            if rel < rows_h {
+                let start = browser_scroll(s.repo_view.len(), rows_h, s.repo_cursor);
+                let pos = start + rel;
+                if pos < s.repo_view.len() {
+                    s.repo_cursor = pos;
+                    s.open_selected_repo();
+                }
+            }
+            return;
+        }
+    }
     // No repo panel
     if !s.is_git_repo {
         mouse_no_repo(col, row, s, inner);
@@ -191,11 +215,6 @@ pub fn handle_mouse_click(
     // Confirm-remove modal: any click outside the modal dismisses it.
     if s.show_confirm_remove {
         s.show_confirm_remove = false;
-        return;
-    }
-    // Repo overview: clicks dismiss (keyboard is the interaction model).
-    if s.show_repo_overview {
-        s.show_repo_overview = false;
         return;
     }
     // Dashboard clicks

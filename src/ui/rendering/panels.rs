@@ -6,8 +6,11 @@ use ratatui::{
     widgets::{BorderType, Clear, List, ListItem, Paragraph},
 };
 
-use super::components::{draw_continuous_border, draw_solid_border, short_path, soften};
+use crate::i18n::{translate, trf};
+use crate::ui::state::repos::RepoEntry;
 use crate::ui::state::{AppState, GitCommit};
+
+use super::components::{draw_continuous_border, draw_solid_border, short_path, soften};
 
 pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
     f.render_widget(
@@ -278,8 +281,12 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
 
     let content = body;
 
-    // Sidebar: FILES only, takes full height
-    let sidebar_w = (content.width / 4).max(20);
+    // Sidebar: FILES on top; when the repo browser is open it takes the
+    // bottom sector of the same column (where the shortcuts block used to
+    // live) and the column widens — the dropdown is the focus then.
+    let (files_area, browser_area) =
+        sidebar_split(content, s.show_repo_overview, s.repo_view.len());
+    let sidebar_w = files_area.width;
     let main = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(sidebar_w), Constraint::Min(20)])
@@ -287,8 +294,12 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
 
     let sidebar = main[0];
     let right = main[1];
-
-    let files_area = sidebar;
+    let files_area = Rect {
+        x: sidebar.x,
+        y: sidebar.y,
+        width: sidebar.width,
+        height: files_area.height,
+    };
     let files_title = format!(" FILES ({}) ", s.files.len());
     let border_color = if s.focus_pane == "files" {
         s.theme.primary
@@ -450,6 +461,10 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             List::new(all_items).style(Style::default().bg(s.theme.background)),
             files_inner,
         );
+    }
+
+    if let Some(browser) = browser_area {
+        draw_repo_browser(f, browser, s);
     }
 
     // ── Right panel: DIFF + COMMITS ────────────────────────────────
@@ -727,6 +742,246 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
     }
 }
 
+/// Sidebar geometry: `(files_area, browser_area)`. Kept as a pure helper so
+/// the mouse handlers hit-test exactly what `draw_dashboard` paints.
+/// With the browser closed nothing changes; with it open the column widens
+/// (clamped) and the bottom sector becomes the repo dropdown.
+pub fn sidebar_split(body: Rect, browser_open: bool, view_rows: usize) -> (Rect, Option<Rect>) {
+    if !browser_open {
+        let w = (body.width / 4).max(20).min(body.width);
+        let files = Rect {
+            x: body.x,
+            y: body.y,
+            width: w,
+            height: body.height,
+        };
+        return (files, None);
+    }
+    let browser = browser_area(body, view_rows, false);
+    let files = Rect {
+        x: body.x,
+        y: body.y,
+        width: browser.width,
+        height: body.height - browser.height,
+    };
+    (files, Some(browser))
+}
+
+/// Geometry of the repo browser dropdown. `full_height` is used when there
+/// is no repository to show above it (the no-repo screen splits the body
+/// browser-left / panel-right instead of stacking them).
+pub fn browser_area(body: Rect, view_rows: usize, full_height: bool) -> Rect {
+    let w = (body.width / 2).clamp(38, 58).min(body.width);
+    if full_height {
+        return Rect {
+            x: body.x,
+            y: body.y,
+            width: w,
+            height: body.height,
+        };
+    }
+    // chrome: 2 border rows + summary + filter + hint = 5, +1 breathing
+    let want = (view_rows as u16).clamp(3, 14) + 6;
+    let bh = want
+        .max(9)
+        .min(body.height.saturating_sub(6).max(9))
+        .min(body.height);
+    Rect {
+        x: body.x,
+        y: body.y + body.height - bh,
+        width: w,
+        height: bh,
+    }
+}
+
+/// Visible row window inside a browser rect: `(rows_top, rows_h)` in screen
+/// coordinates. Single source of truth for drawing and click hit-testing.
+pub fn browser_rows_rect(area: Rect) -> (u16, usize) {
+    // inner.y = area.y + 1; row 0 = summary, row 1 = filter, rows start +2
+    (area.y + 3, area.height.saturating_sub(5) as usize)
+}
+
+/// First visible row index for the browser's scroll window.
+pub fn browser_scroll(view_len: usize, rows_h: usize, cursor: usize) -> usize {
+    if rows_h == 0 || view_len <= rows_h {
+        return 0;
+    }
+    cursor.saturating_sub(rows_h / 2).min(view_len - rows_h)
+}
+
+/// The repo browser dropdown: bordered panel with a dirty-summary line, a
+/// type-to-filter line, matching rows (Enter/click opens) and a keybinding
+/// hint. All data is pre-computed by `state::repos::scan_repos` — drawing
+/// performs zero git calls.
+pub fn draw_repo_browser(f: &mut Frame, area: Rect, s: &AppState) {
+    draw_continuous_border(
+        f,
+        area,
+        &translate(&s.language, "repos_browser_title"),
+        Style::default()
+            .fg(s.theme.primary)
+            .add_modifier(Modifier::BOLD),
+        s.theme.primary,
+        s.theme.background,
+        BorderType::Plain,
+    );
+    let inner = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+    if inner.width < 6 || inner.height < 4 {
+        return;
+    }
+
+    let w = inner.width as usize;
+    let mut lines: Vec<Line> = Vec::with_capacity(inner.height as usize);
+
+    // Line 1: "X of Y repos have uncommitted changes".
+    lines.push(Line::from(vec![Span::styled(
+        trf(
+            &s.language,
+            "repo_overview_summary",
+            &[&s.repo_dirty_count.to_string(), &s.repos.len().to_string()],
+        ),
+        Style::default()
+            .fg(if s.repo_dirty_count > 0 {
+                s.theme.warning
+            } else {
+                s.theme.success
+            })
+            .bg(s.theme.background)
+            .add_modifier(Modifier::BOLD),
+    )]));
+
+    // Line 2: the live filter.
+    lines.push(Line::from(vec![
+        Span::styled(
+            format!("\u{2315} {}", s.repo_filter),
+            Style::default()
+                .fg(s.theme.accent)
+                .bg(s.theme.background)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            "\u{2588}",
+            Style::default().fg(s.theme.accent).bg(s.theme.background),
+        ),
+        Span::styled(
+            format!(" {}/{}", s.repo_view.len(), s.repos.len()),
+            Style::default().fg(s.theme.dimmed).bg(s.theme.background),
+        ),
+    ]));
+
+    // Rows (scroll window around the cursor). Geometry shared with the
+    // mouse hit-testing via `browser_rows_rect`.
+    let (_rows_top, rows_h) = browser_rows_rect(area);
+    if s.repo_view.is_empty() {
+        let msg = if s.repos.is_empty() {
+            translate(&s.language, "repo_overview_empty").into_owned()
+        } else {
+            translate(&s.language, "repos_no_match").into_owned()
+        };
+        lines.push(Line::from(Span::styled(
+            msg,
+            Style::default().fg(s.theme.dimmed).bg(s.theme.background),
+        )));
+    } else {
+        let start = browser_scroll(s.repo_view.len(), rows_h, s.repo_cursor);
+        for (pos, &idx) in s.repo_view.iter().enumerate().skip(start).take(rows_h) {
+            if lines.len() >= (inner.height as usize).saturating_sub(1) {
+                break;
+            }
+            lines.push(repo_browser_row(s, pos, &s.repos[idx], w));
+        }
+    }
+
+    // Hint pinned to the last inner row.
+    while lines.len() < (inner.height as usize).saturating_sub(1) {
+        lines.push(Line::from(""));
+    }
+    lines.push(Line::from(Span::styled(
+        translate(&s.language, "repo_overview_help").into_owned(),
+        Style::default().fg(s.theme.dimmed).bg(s.theme.background),
+    )));
+
+    f.render_widget(
+        Paragraph::new(lines).style(Style::default().bg(s.theme.background)),
+        inner,
+    );
+}
+
+/// One browser row. Columns degrade on narrow sidebars: relative path
+/// (+ branch/sync when there's room), dirty chip, activity age.
+fn repo_browser_row(s: &AppState, view_pos: usize, e: &RepoEntry, width: usize) -> Line<'static> {
+    let selected = view_pos == s.repo_cursor;
+    let base = if selected {
+        Style::default()
+            .bg(s.theme.highlight)
+            .fg(s.theme.on_highlight)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .bg(s.theme.background)
+            .fg(s.theme.foreground)
+    };
+    let pre = if selected { "\u{25B6} " } else { "  " };
+    let wide = width >= 40;
+    let (chip, chip_style) = if selected {
+        (format!("{:<5}", format!("{} \u{2731}", e.dirty)), base)
+    } else if e.dirty > 0 {
+        (
+            format!("{:<5}", format!("{} \u{2731}", e.dirty)),
+            base.fg(s.theme.warning).add_modifier(Modifier::BOLD),
+        )
+    } else {
+        ("  \u{2713}  ".to_string(), base.fg(s.theme.success))
+    };
+    let name_w = if wide { 18 } else { 22 };
+
+    let mut spans = vec![
+        Span::styled(pre, base),
+        Span::styled(clip(&e.rel, name_w), base.add_modifier(Modifier::BOLD)),
+    ];
+    if wide {
+        let sync = format!("\u{2191}{}\u{2193}{}", e.ahead, e.behind);
+        let sync_style = if selected {
+            base
+        } else if e.behind > 0 {
+            base.fg(s.theme.warning)
+        } else if e.ahead > 0 {
+            base.fg(s.theme.success)
+        } else {
+            base.fg(s.theme.dimmed)
+        };
+        spans.push(Span::styled(
+            format!(" {}", clip(&e.branch, 10)),
+            base.fg(s.theme.primary),
+        ));
+        spans.push(Span::styled(format!(" {sync:<5}"), sync_style));
+    } else {
+        spans.push(Span::raw("  "));
+    }
+    spans.push(Span::styled(chip, chip_style));
+    spans.push(Span::styled(
+        e.age.clone(),
+        base.fg(s.theme.dimmed).add_modifier(Modifier::BOLD),
+    ));
+    Line::from(spans)
+}
+
+/// Left-align and clip to `max` chars (char-boundary safe, `…` marker).
+fn clip(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        format!("{text:<max$}")
+    } else {
+        let mut out: String = text.chars().take(max.saturating_sub(1)).collect();
+        out.push('\u{2026}');
+        out
+    }
+}
+
 /// Truncate `subject` to at most `max` characters, replacing the tail with
 /// an ellipsis when shortened. Character-boundary safe: the previous
 /// implementation byte-sliced (`&subj[..n]`), which panicked the whole TUI
@@ -916,5 +1171,75 @@ mod tests {
         // max < 5 clamps to 5, so "ab..." is always representable.
         let s = truncate_subject("abcdefg", 1);
         assert_eq!(s, "ab...");
+    }
+
+    #[test]
+    fn clip_pads_short_and_elides_long() {
+        assert_eq!(clip("ab", 5), "ab   ");
+        assert_eq!(clip("abcdef", 5), "abcd\u{2026}");
+        // Char-boundary safe with multibyte content.
+        assert_eq!(clip("café-verde-más", 6), "caf\u{00e9}-\u{2026}");
+    }
+
+    #[test]
+    fn browser_scroll_no_op_when_it_fits() {
+        assert_eq!(browser_scroll(5, 10, 4), 0);
+        assert_eq!(browser_scroll(3, 0, 2), 0);
+    }
+
+    #[test]
+    fn browser_scroll_keeps_cursor_visible() {
+        // 30 rows, 10 visible: bottom cursor clamps to the last window.
+        assert_eq!(browser_scroll(30, 10, 29), 20);
+        // Middle cursor centers.
+        assert_eq!(browser_scroll(30, 10, 15), 10);
+        // Top cursor pins to zero.
+        assert_eq!(browser_scroll(30, 10, 2), 0);
+    }
+
+    #[test]
+    fn sidebar_split_without_browser_keeps_quarter_width() {
+        let body = Rect {
+            x: 1,
+            y: 2,
+            width: 100,
+            height: 40,
+        };
+        let (files, browser) = sidebar_split(body, false, 0);
+        assert!(browser.is_none());
+        assert_eq!(files.width, 25);
+        assert_eq!(files.height, 40);
+    }
+
+    #[test]
+    fn sidebar_split_with_browser_stacks_bottom_sector() {
+        let body = Rect {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 40,
+        };
+        let (files, Some(browser)) = sidebar_split(body, true, 8) else {
+            panic!("browser area expected");
+        };
+        assert_eq!(files.width, browser.width);
+        assert_eq!(files.height + browser.height, body.height);
+        assert_eq!(browser.y, body.y + files.height);
+        // 8 rows + 6 chrome = 14 requested.
+        assert_eq!(browser.height, 14);
+    }
+
+    #[test]
+    fn browser_area_full_height_when_no_repo() {
+        let body = Rect {
+            x: 0,
+            y: 0,
+            width: 100,
+            height: 40,
+        };
+        let area = browser_area(body, 30, true);
+        assert_eq!(area.y, 0);
+        assert_eq!(area.height, 40);
+        assert!(area.width >= 38 && area.width <= 58);
     }
 }

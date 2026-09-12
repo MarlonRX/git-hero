@@ -19,6 +19,23 @@ use components::{
     draw_solid_hline,
 };
 
+/// Header rows occupied by the logo/status block inside the inner frame.
+pub const HEADER_H: u16 = 9;
+/// Footer rows (separator + status line).
+pub const FOOTER_H: u16 = 2;
+
+/// The body rectangle between header and footer for a given inner frame.
+/// Shared by `draw_ui` and the mouse handlers so hit-testing geometry can
+/// never drift from what is actually painted.
+pub fn body_area(inner: Rect) -> Rect {
+    Rect {
+        x: inner.x,
+        y: inner.y + HEADER_H,
+        width: inner.width,
+        height: inner.height.saturating_sub(HEADER_H + FOOTER_H),
+    }
+}
+
 /// Top-level entry point. The setup wizard short-circuits everything
 /// else; otherwise we compose `draw_background`, `draw_banner`, the
 /// main panel routing, the footer, the command bar, the active modal
@@ -42,7 +59,7 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
     draw_solid_border(f, outer, &s.theme);
 
     // Header: bordered container with logo + status (9 rows: 1 top + 6 logo + 1 status + 1 bottom)
-    let header_h: u16 = 9;
+    let header_h: u16 = HEADER_H;
     let header_area = Rect {
         x: inner.x,
         y: inner.y,
@@ -77,13 +94,8 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         s,
     );
 
-    let footer_h: u16 = 2;
-    let body = Rect {
-        x: inner.x,
-        y: inner.y + header_h,
-        width: inner.width,
-        height: inner.height.saturating_sub(header_h + footer_h),
-    };
+    let footer_h: u16 = FOOTER_H;
+    let body = body_area(inner);
     let footer = Rect {
         x: inner.x,
         y: body.y + body.height,
@@ -93,7 +105,21 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
 
     // Route the body to the right panel.
     if !s.is_git_repo && !s.init_wizard_active {
-        panels::draw_no_repo_panel(f, s, body);
+        if s.show_repo_overview {
+            // Outside a repo: browser gets its own left column so the
+            // no-repo panel (init / /cd suggestions) stays visible.
+            let area = panels::browser_area(body, s.repo_view.len(), true);
+            let right = Rect {
+                x: body.x + area.width,
+                y: body.y,
+                width: body.width - area.width,
+                height: body.height,
+            };
+            panels::draw_repo_browser(f, area, s);
+            panels::draw_no_repo_panel(f, s, right);
+        } else {
+            panels::draw_no_repo_panel(f, s, body);
+        }
     } else if s.init_wizard_active {
         panels::draw_init_wizard(f, s, body);
     } else {
@@ -434,8 +460,6 @@ fn draw_active_modal(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_confirm_pull_modal(f, s);
     } else if s.show_confirm_remove {
         super::modals::draw_confirm_remove_modal(f, s);
-    } else if s.show_repo_overview {
-        super::modals::draw_repo_overview(f, s);
     } else if s.show_credentials_modal {
         super::modals::draw_credentials_modal(f, s);
     } else if s.show_update_modal {

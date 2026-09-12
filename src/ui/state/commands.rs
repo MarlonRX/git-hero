@@ -466,17 +466,19 @@ impl AppState {
         }
     }
 
-    // ── /repos — multi-repo overview ─────────────────────────────
+    // ── /repos — repository browser ────────────────────────────────
 
-    /// Repository-manager core: scan sibling repos (branch, sync state,
-    /// dirty count, last activity) and open the overview panel. Cost is
-    /// two `git` processes per discovered repo, once — not per frame.
+    /// Repository-manager core: recursively scan for repos (branch, sync
+    /// state, dirty count, last activity) and open the sidebar browser.
+    /// Cost is two `git` processes per discovered repo, once — typing in
+    /// the filter never touches git.
     fn cmd_repos(&mut self) {
-        let scan = super::repos::scan_sibling_repos();
+        let scan = super::repos::scan_repos();
         self.repo_dirty_count = scan.dirty_count();
         self.repo_scan_root = scan.root;
         self.repos = scan.entries;
-        self.repo_cursor = 0;
+        self.repo_filter.clear();
+        self.apply_repo_filter();
         self.show_repo_overview = true;
     }
 

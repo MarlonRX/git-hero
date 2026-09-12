@@ -116,12 +116,12 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "status_language_changed" => "Language changed to: {}",
     "status_language_same" => "Language is already {}",
     "status_unknown_cmd" => "Unknown command: {}. Type /help.",
-    // ── Repo-overview (multi-repo manager) keys ───────────────────
-    "repo_overview_title" => " Repository Overview ",
-    "repo_overview_help" => "[↑/↓] Select  [Enter] Open  [g] Rescan  [Esc] Close",
+    // ── Repo browser (multi-repo manager) keys ────────────────────
+    "repos_browser_title" => " Repositories ",
+    "repo_overview_help" => "Type to filter - Enter open - Ctrl+R rescan - Esc",
     "repo_overview_summary" => "{} of {} repos have uncommitted changes",
     "repo_overview_empty" => "No Git repositories found near this directory.",
-    "repo_overview_no_commits" => "no commits",
+    "repos_no_match" => "No repository matches the filter.",
 };
 
 /// Spanish dictionary (built at compile time).
@@ -225,11 +225,11 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "status_language_changed" => "Idioma cambiado a: {}",
     "status_language_same" => "El idioma ya es {}",
     "status_unknown_cmd" => "Comando desconocido: {}. Escribe /help.",
-    "repo_overview_title" => " Resumen de Repositorios ",
-    "repo_overview_help" => "[↑/↓] Seleccionar  [Enter] Abrir  [g] Reescanear  [Esc] Cerrar",
+    "repos_browser_title" => " Repositorios ",
+    "repo_overview_help" => "Escribe para filtrar - Enter abrir - Ctrl+R reescanear - Esc",
     "repo_overview_summary" => "{} de {} repos tienen cambios sin commitear",
     "repo_overview_empty" => "No se encontraron repositorios Git cerca de este directorio.",
-    "repo_overview_no_commits" => "sin commits",
+    "repos_no_match" => "Ningún repositorio coincide con el filtro.",
 };
 
 /// Look up a translation for `key` in the given language.

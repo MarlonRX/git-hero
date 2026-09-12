@@ -479,36 +479,39 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
     true
 }
 
-/// Keyboard handler for the multi-repo overview panel (`/repos` / `g`).
-/// Deliberately self-contained: navigation, open (Enter → `/cd`), rescan
-/// (`g`) and close (`Esc`/`q`). No destructive actions live here.
-pub fn handle_repo_overview_key(code: KeyCode, s: &mut AppState) {
+/// Keystroke handler for the sidebar repository browser (`g` / `/repos`).
+/// Behaviour: plain typing edits the filter (no git calls), ↑/↓ move
+/// through matches, Enter opens the selected repo, Ctrl+R re-scans,
+/// Esc closes. No destructive actions live here.
+pub fn handle_repo_overview_key(key: KeyEvent, s: &mut AppState) {
+    let code = key.code;
+    let mods = key.modifiers;
+
+    if code == KeyCode::Char('r') && mods.contains(KeyModifiers::CONTROL) {
+        s.execute_command("/repos"); // full re-scan, filter reset
+        return;
+    }
+
     match code {
-        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
-            s.show_repo_overview = false;
-        }
-        KeyCode::Up | KeyCode::Char('k') => {
-            if !s.repos.is_empty() {
-                s.repo_cursor = (s.repo_cursor + s.repos.len() - 1) % s.repos.len();
+        KeyCode::Esc => s.show_repo_overview = false,
+        KeyCode::Up => {
+            if !s.repo_view.is_empty() {
+                s.repo_cursor = (s.repo_cursor + s.repo_view.len() - 1) % s.repo_view.len();
             }
         }
-        KeyCode::Down | KeyCode::Char('j') => {
-            if !s.repos.is_empty() {
-                s.repo_cursor = (s.repo_cursor + 1) % s.repos.len();
+        KeyCode::Down => {
+            if !s.repo_view.is_empty() {
+                s.repo_cursor = (s.repo_cursor + 1) % s.repo_view.len();
             }
         }
-        KeyCode::Enter => {
-            if let Some(entry) = s.repos.get(s.repo_cursor) {
-                let path = entry.path.clone();
-                s.show_repo_overview = false;
-                // Reuse the command pipeline so path handling (tabs trim,
-                // `~` expansion, refresh, status message) stays single-sourced.
-                s.execute_command(&format!("/cd {path}"));
-            }
+        KeyCode::Enter => s.open_selected_repo(),
+        KeyCode::Backspace => {
+            s.repo_filter.pop();
+            s.apply_repo_filter();
         }
-        KeyCode::Char('g') | KeyCode::Char('G') | KeyCode::Char('r') | KeyCode::Char('R') => {
-            // Global rescan: re-probe every repo with fresh git snapshots.
-            s.execute_command("/repos");
+        KeyCode::Char(c) if mods.is_empty() || mods == KeyModifiers::SHIFT => {
+            s.repo_filter.push(c);
+            s.apply_repo_filter();
         }
         _ => {}
     }

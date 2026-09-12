@@ -300,7 +300,7 @@ impl Command {
         ("/config-global <k> [v]", "Read or set global config"),
         (
             "/repos",
-            "Repository overview: branch, ahead/behind, dirty count",
+            "Repository browser: recursive scan, type to filter",
         ),
         ("/stash", "git stash"),
         ("/stash-pop", "git stash pop"),

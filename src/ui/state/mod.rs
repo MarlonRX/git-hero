@@ -161,12 +161,17 @@ pub struct AppState {
     /// see `docs.rs`: "/remove-repo         Delete .git directory (no confirm!)".
     pub show_confirm_remove: bool,
 
-    // ── Repo Overview (multi-repo manager) ─────────────────────────
-    /// Set by `/repos` (or the `g` key): the sibling-repository scan
-    /// panel. The scan itself is on-demand (`cmd_repos` / rescan key),
-    /// never per frame.
+    // ── Repo Browser (multi-repo manager) ──────────────────────────
+    /// Sidebar dropdown listing all repos found by the recursive scan.
+    /// Opened with `g` / `/repos`. NOT a modal: it lives in the dashboard
+    /// sidebar and captures keystrokes only while open.
     pub show_repo_overview: bool,
     pub repos: Vec<repos::RepoEntry>,
+    /// Indices into `repos` surviving the current `repo_filter`, in scan
+    /// order. The browser list and `repo_cursor` address this view.
+    pub repo_view: Vec<usize>,
+    /// Type-ahead query for the browser (plain text, never a git call).
+    pub repo_filter: String,
     pub repo_cursor: usize,
     pub repo_scan_root: String,
     /// How many of `repos` have uncommitted changes (headline counter).
@@ -270,6 +275,8 @@ impl AppState {
             // Repo Overview
             show_repo_overview: false,
             repos: Vec::new(),
+            repo_view: Vec::new(),
+            repo_filter: String::new(),
             repo_cursor: 0,
             repo_scan_root: String::new(),
             repo_dirty_count: 0,
@@ -643,7 +650,6 @@ impl AppState {
             || self.show_confirm_remove
             || self.show_credentials_modal
             || self.show_update_modal
-            || self.show_repo_overview
     }
 }
 
