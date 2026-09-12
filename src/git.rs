@@ -470,20 +470,37 @@ pub struct StatusSnapshot {
 }
 
 /// Run `git status --branch --porcelain=v2` and parse the result.
+///
+/// This single call replaces the former 3-call probe sequence
+/// (`rev-parse --is-inside-work-tree` + `status` + `rev-list` pair).
+/// When git says the directory is not a repository, the error maps to
+/// [`GitError::NotARepository`](crate::git_error::GitError::NotARepository)
+/// so callers can update their "is a repo?" flag without a second probe.
 pub fn status_snapshot() -> Result<StatusSnapshot, crate::git_error::GitError> {
     let output = Command::new("git")
         .args(["status", "--branch", "--porcelain=v2"])
         .output()
         .map_err(|e| crate::git_error::GitError::SpawnFailed(e.to_string()))?;
     if !output.status.success() {
+        let stderr = stderr_to_err(&output.stderr);
+        if is_not_a_repo_message(&stderr) {
+            return Err(crate::git_error::GitError::NotARepository);
+        }
         return Err(crate::git_error::GitError::CommandFailed {
-            stderr: stderr_to_err(&output.stderr).into_owned(),
+            stderr: stderr.into_owned(),
             code: output.status.code(),
         });
     }
     let text = str::from_utf8(&output.stdout)
         .map_err(|_| crate::git_error::GitError::Other("non-UTF-8 in git status output".into()))?;
     Ok(parse_porcelain_v2(text))
+}
+
+/// True when a git stderr message indicates the working directory is not
+/// a repository (`fatal: not a git repository (or any of the parent
+/// directories): .git` and friends).
+fn is_not_a_repo_message(stderr: &str) -> bool {
+    stderr.to_ascii_lowercase().contains("not a git repository")
 }
 
 /// Parse the textual output of `git status --porcelain=v2`.
@@ -886,6 +903,26 @@ mod tests {
     fn parse_log_empty_returns_empty_vec() {
         assert!(parse_log_nul("").is_empty());
         assert!(parse_log_nul("\x00\x00\x00").is_empty());
+    }
+
+    // ── is_not_a_repo_message ──
+
+    #[test]
+    fn not_a_repo_detected_from_canonical_message() {
+        assert!(is_not_a_repo_message(
+            "fatal: not a git repository (or any of the parent directories): .git"
+        ));
+    }
+
+    #[test]
+    fn not_a_repo_detection_is_case_insensitive() {
+        assert!(is_not_a_repo_message("fatal: Not a Git Repository"));
+    }
+
+    #[test]
+    fn unrelated_error_is_not_a_repo() {
+        assert!(!is_not_a_repo_message("fatal: Unable to create '.git/index.lock'"));
+        assert!(!is_not_a_repo_message(""));
     }
 
     #[test]

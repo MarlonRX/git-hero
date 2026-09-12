@@ -281,81 +281,89 @@ impl AppState {
         state
     }
 
+    /// Refresh all git-backed state. Costs exactly **two** `git` process
+    /// invocations: `status --branch --porcelain=v2` (which doubles as the
+    /// "is this a repo?" probe via `GitError::NotARepository`) and
+    /// `log -n 15`. Previously this was six separate calls.
     pub fn refresh_git_status(&mut self) {
-        self.is_git_repo = git::is_inside_work_tree();
-        if self.is_git_repo {
-            // Single snapshot replaces 6+ separate git invocations.
-            let ahead = match git::status_snapshot() {
-                Ok(snap) => {
-                    self.branch = if snap.branch == "(detached)" {
-                        String::new()
-                    } else {
-                        snap.branch
-                    };
-                    // `upstream` is `remote/branch` — keep just the remote.
-                    self.remote = snap
-                        .upstream
-                        .split('/')
-                        .next()
-                        .filter(|s| !s.is_empty())
-                        .unwrap_or("origin")
-                        .to_string();
-                    self.behind = snap.behind;
-                    self.ahead = snap.ahead;
-                    self.files = snap.files.iter().map(file_snapshot_to_git_file).collect();
-                    self.rebuild_file_tree();
-                    self.ahead as usize
-                }
-                Err(e) => {
-                    log::log_debug(&format!("status_snapshot failed: {e}"));
-                    self.branch.clear();
-                    self.remote.clear();
-                    self.behind = 0;
-                    self.ahead = 0;
-                    self.files.clear();
-                    self.flat_entries.clear();
-                    self.status_message = format!("git status error: {e}");
-                    self.commits.clear();
-                    self.update_diff_content();
-                    return;
-                }
-            };
+        match git::status_snapshot() {
+            Ok(snap) => {
+                self.is_git_repo = true;
+                let ahead = snap.ahead as usize;
+                self.branch = if snap.branch == "(detached)" {
+                    String::new()
+                } else {
+                    snap.branch
+                };
+                // `upstream` is `remote/branch` — keep just the remote.
+                self.remote = snap
+                    .upstream
+                    .split('/')
+                    .next()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("origin")
+                    .to_string();
+                self.behind = snap.behind;
+                self.ahead = snap.ahead;
+                self.files = snap.files.iter().map(file_snapshot_to_git_file).collect();
+                self.rebuild_file_tree();
 
-            // One log call, then derive per-commit `pushed` from the ahead
-            // count: the first `ahead` commits (newest) are unpushed.
-            self.commits = match git::log_snapshot(15) {
-                Ok(entries) => entries
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, entry)| GitCommit {
-                        hash: entry.hash,
-                        date: entry.date,
-                        subject: entry.subject,
-                        pushed: i >= ahead,
-                    })
-                    .collect(),
-                Err(e) => {
-                    log::log_debug(&format!("log_snapshot failed: {e}"));
-                    Vec::new()
-                }
-            };
+                // One log call, then derive per-commit `pushed` from the
+                // ahead count: the first `ahead` commits (newest) are
+                // unpushed.
+                self.commits = match git::log_snapshot(15) {
+                    Ok(entries) => entries
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, entry)| GitCommit {
+                            hash: entry.hash,
+                            date: entry.date,
+                            subject: entry.subject,
+                            pushed: i >= ahead,
+                        })
+                        .collect(),
+                    Err(e) => {
+                        log::log_debug(&format!("log_snapshot failed: {e}"));
+                        Vec::new()
+                    }
+                };
 
-            if !self.files.is_empty() && self.selected_file_idx >= self.files.len() {
-                self.selected_file_idx = 0;
+                if !self.files.is_empty() && self.selected_file_idx >= self.files.len() {
+                    self.selected_file_idx = 0;
+                }
+                if !self.commits.is_empty() && self.selected_commit_idx >= self.commits.len() {
+                    self.selected_commit_idx = 0;
+                }
+                self.update_diff_content();
             }
-            if !self.commits.is_empty() && self.selected_commit_idx >= self.commits.len() {
-                self.selected_commit_idx = 0;
+            Err(crate::git_error::GitError::NotARepository)
+            | Err(crate::git_error::GitError::SpawnFailed(_)) => {
+                self.is_git_repo = false;
+                self.branch.clear();
+                self.remote.clear();
+                self.behind = 0;
+                self.ahead = 0;
+                self.files.clear();
+                self.flat_entries.clear();
+                self.commits.clear();
+                self.active_diff.clear();
+                self.status_message = "Warning: Not a Git repository.".to_string();
             }
-            self.update_diff_content();
-        } else {
-            self.branch.clear();
-            self.remote.clear();
-            self.behind = 0;
-            self.ahead = 0;
-            self.files.clear();
-            self.commits.clear();
-            self.active_diff.clear();
-            self.status_message = "Warning: Not a Git repository.".to_string();
+            Err(e) => {
+                // We are inside a repo (git answered) but status failed
+                // for another reason (locked index, corrupt ref, ...).
+                log::log_debug(&format!("status_snapshot failed: {e}"));
+                self.is_git_repo = true;
+                self.branch.clear();
+                self.remote.clear();
+                self.behind = 0;
+                self.ahead = 0;
+                self.files.clear();
+                self.flat_entries.clear();
+                self.status_message = format!("git status error: {e}");
+                self.commits.clear();
+                self.update_diff_content();
+            }
         }
     }
 
