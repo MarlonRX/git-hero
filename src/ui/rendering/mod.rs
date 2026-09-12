@@ -401,6 +401,8 @@ fn draw_active_modal(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_confirm_pull_modal(f, s);
     } else if s.show_confirm_remove {
         super::modals::draw_confirm_remove_modal(f, s);
+    } else if s.show_repo_overview {
+        super::modals::draw_repo_overview(f, s);
     } else if s.show_credentials_modal {
         super::modals::draw_credentials_modal(f, s);
     } else if s.show_update_modal {

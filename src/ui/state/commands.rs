@@ -96,6 +96,7 @@ impl AppState {
             Command::Stash => self.cmd_stash(),
             Command::StashPop => self.cmd_stash_pop(),
             Command::SetLanguage(lang) => self.cmd_set_language(&lang),
+            Command::Repos => self.cmd_repos(),
             Command::Quit => {
                 // No direct way to break the main loop from here; the
                 // user can press `q`. `/quit` is a no-op for now.
@@ -488,6 +489,20 @@ impl AppState {
                 self.status_message = trf(&self.language, "status_err_stash_pop", &[&e])
             }
         }
+    }
+
+    // ── /repos — multi-repo overview ─────────────────────────────
+
+    /// Repository-manager core: scan sibling repos (branch, sync state,
+    /// dirty count, last activity) and open the overview panel. Cost is
+    /// two `git` processes per discovered repo, once — not per frame.
+    fn cmd_repos(&mut self) {
+        let scan = super::repos::scan_sibling_repos();
+        self.repo_dirty_count = scan.dirty_count();
+        self.repo_scan_root = scan.root;
+        self.repos = scan.entries;
+        self.repo_cursor = 0;
+        self.show_repo_overview = true;
     }
 
     // ── /language <en|es> ────────────────────────────────────────

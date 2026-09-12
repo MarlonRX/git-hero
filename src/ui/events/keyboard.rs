@@ -248,6 +248,7 @@ pub fn handle_no_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             }
         }
         KeyCode::Char('t') | KeyCode::Char('T') => s.execute_command("/themes"),
+        KeyCode::Char('g') | KeyCode::Char('G') => s.execute_command("/repos"),
         KeyCode::Char('q') | KeyCode::Char('Q') => return false,
         _ => {}
     }
@@ -346,6 +347,7 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::Char('s') | KeyCode::Char('S') => s.execute_command("/stash"),
         KeyCode::Char('d') | KeyCode::Char('D') => s.execute_command("/stash-pop"),
         KeyCode::Char('b') | KeyCode::Char('B') => s.execute_command("/branches"),
+        KeyCode::Char('g') | KeyCode::Char('G') => s.execute_command("/repos"),
         KeyCode::Char('n') | KeyCode::Char('N') => { s.show_input = true; s.input_value = "/branch ".into(); s.input_cursor_pos = 8; s.update_suggestions(); }
         KeyCode::Char('o') | KeyCode::Char('O') => { s.show_input = true; s.input_value = "/remote ".into(); s.input_cursor_pos = 8; }
         // ── Original shortcuts ──────────────────────────────────
@@ -398,6 +400,41 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         _ => {}
     }
     true
+}
+
+/// Keyboard handler for the multi-repo overview panel (`/repos` / `g`).
+/// Deliberately self-contained: navigation, open (Enter → `/cd`), rescan
+/// (`g`) and close (`Esc`/`q`). No destructive actions live here.
+pub fn handle_repo_overview_key(code: KeyCode, s: &mut AppState) {
+    match code {
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+            s.show_repo_overview = false;
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if !s.repos.is_empty() {
+                s.repo_cursor = (s.repo_cursor + s.repos.len() - 1) % s.repos.len();
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if !s.repos.is_empty() {
+                s.repo_cursor = (s.repo_cursor + 1) % s.repos.len();
+            }
+        }
+        KeyCode::Enter => {
+            if let Some(entry) = s.repos.get(s.repo_cursor) {
+                let path = entry.path.clone();
+                s.show_repo_overview = false;
+                // Reuse the command pipeline so path handling (tabs trim,
+                // `~` expansion, refresh, status message) stays single-sourced.
+                s.execute_command(&format!("/cd {path}"));
+            }
+        }
+        KeyCode::Char('g') | KeyCode::Char('G') | KeyCode::Char('r') | KeyCode::Char('R') => {
+            // Global rescan: re-probe every repo with fresh git snapshots.
+            s.execute_command("/repos");
+        }
+        _ => {}
+    }
 }
 
 pub fn handle_confirm_push_key(code: KeyCode, s: &mut AppState) {

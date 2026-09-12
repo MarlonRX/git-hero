@@ -50,6 +50,12 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
+    // ── Repo Overview (multi-repo manager) ───────────────────────
+    if s.show_repo_overview {
+        handle_repo_overview_key(code, s);
+        return true;
+    }
+
     // ── Setup Wizard ─────────────────────────────────────────────
     if s.setup_step > 0 {
         handle_setup_key(code, s);
@@ -158,6 +164,8 @@ pub fn handle_mouse_click(
     if !s.is_git_repo { mouse_no_repo(col, row, s, inner); return; }
     // Confirm-remove modal: any click outside the modal dismisses it.
     if s.show_confirm_remove { s.show_confirm_remove = false; return; }
+    // Repo overview: clicks dismiss (keyboard is the interaction model).
+    if s.show_repo_overview { s.show_repo_overview = false; return; }
     // Dashboard clicks
     mouse_dashboard(col, row, s, inner);
 }

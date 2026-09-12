@@ -10,6 +10,7 @@ use crate::theme::{get_theme_by_name, Theme};
 pub mod command;
 pub mod commands;
 pub mod icons;
+pub mod repos;
 pub mod suggestions;
 
 /// Identifies the *input* to `update_diff_content` so we can skip git
@@ -160,6 +161,17 @@ pub struct AppState {
     /// see `docs.rs`: "/remove-repo         Delete .git directory (no confirm!)".
     pub show_confirm_remove: bool,
 
+    // ── Repo Overview (multi-repo manager) ─────────────────────────
+    /// Set by `/repos` (or the `g` key): the sibling-repository scan
+    /// panel. The scan itself is on-demand (`cmd_repos` / rescan key),
+    /// never per frame.
+    pub show_repo_overview: bool,
+    pub repos: Vec<repos::RepoEntry>,
+    pub repo_cursor: usize,
+    pub repo_scan_root: String,
+    /// How many of `repos` have uncommitted changes (headline counter).
+    pub repo_dirty_count: usize,
+
     // ── Update notification ────────────────────────────────────────
     /// Set to `true` when `check_for_updates` finds a newer version.
     pub show_update_modal: bool,
@@ -254,6 +266,13 @@ impl AppState {
             show_confirm_push: false,
             show_confirm_pull: false,
             show_confirm_remove: false,
+
+            // Repo Overview
+            show_repo_overview: false,
+            repos: Vec::new(),
+            repo_cursor: 0,
+            repo_scan_root: String::new(),
+            repo_dirty_count: 0,
 
             // Update notification
             show_update_modal: false,
@@ -619,6 +638,7 @@ impl AppState {
             || self.show_confirm_remove
             || self.show_credentials_modal
             || self.show_update_modal
+            || self.show_repo_overview
     }
 }
 

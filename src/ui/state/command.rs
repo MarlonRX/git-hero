@@ -68,6 +68,8 @@ pub enum Command {
     StashPop,
     /// `/language <en|es>` — switch the UI language
     SetLanguage(String),
+    /// `/repos` — open the multi-repo overview (repository manager)
+    Repos,
     /// `/quit` or `/exit` — leave the TUI
     Quit,
     /// Anything starting with `/` we don't recognise. The original input
@@ -254,6 +256,7 @@ impl Command {
             }),
             "/stash" => return Ok(Command::Stash),
             "/stash-pop" => return Ok(Command::StashPop),
+            "/repos" => return Ok(Command::Repos),
             "/quit" | "/exit" | "/q" => return Ok(Command::Quit),
             _ => {}
         }
@@ -280,6 +283,7 @@ impl Command {
         ("/switch <name>", "Switch to (or create) a branch"),
         ("/config <k> [v]", "Read or set local config"),
         ("/config-global <k> [v]", "Read or set global config"),
+        ("/repos", "Repository overview: branch, ahead/behind, dirty count"),
         ("/stash", "git stash"),
         ("/stash-pop", "git stash pop"),
         ("/themes", "Open the theme picker"),
@@ -371,6 +375,10 @@ mod tests {
     fn stash_and_pop() {
         assert_eq!(ok("/stash"), Command::Stash);
         assert_eq!(ok("/stash-pop"), Command::StashPop);
+    }
+    #[test]
+    fn repos() {
+        assert_eq!(ok("/repos"), Command::Repos);
     }
     #[test]
     fn quit_aliases() {

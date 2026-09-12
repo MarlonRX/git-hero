@@ -477,8 +477,24 @@ pub struct StatusSnapshot {
 /// [`GitError::NotARepository`](crate::git_error::GitError::NotARepository)
 /// so callers can update their "is a repo?" flag without a second probe.
 pub fn status_snapshot() -> Result<StatusSnapshot, crate::git_error::GitError> {
-    let output = Command::new("git")
-        .args(["status", "--branch", "--porcelain=v2"])
+    snapshot_in_dir(None)
+}
+
+/// [`status_snapshot`] variant that probes `dir` via `git -C <dir>`.
+/// Used by the multi-repo overview so sibling repositories can be
+/// inspected without changing the process working directory.
+pub fn status_snapshot_in(dir: &str) -> Result<StatusSnapshot, crate::git_error::GitError> {
+    snapshot_in_dir(Some(dir))
+}
+
+fn snapshot_in_dir(dir: Option<&str>) -> Result<StatusSnapshot, crate::git_error::GitError> {
+    let mut cmd = Command::new("git");
+    let args: &[&str] = match dir {
+        Some(d) => &["-C", d, "status", "--branch", "--porcelain=v2"],
+        None => &["status", "--branch", "--porcelain=v2"],
+    };
+    let output = cmd
+        .args(args)
         .output()
         .map_err(|e| crate::git_error::GitError::SpawnFailed(e.to_string()))?;
     if !output.status.success() {
@@ -501,6 +517,24 @@ pub fn status_snapshot() -> Result<StatusSnapshot, crate::git_error::GitError> {
 /// directories): .git` and friends).
 fn is_not_a_repo_message(stderr: &str) -> bool {
     stderr.to_ascii_lowercase().contains("not a git repository")
+}
+
+/// Epoch seconds of the last commit in `dir` (via `git -C <dir> log -1`),
+/// or `None` when the repo has no commits yet or git failed. Powers the
+/// "sorted by last activity" ordering of the multi-repo overview.
+pub fn last_commit_epoch_in(dir: &str) -> Option<u64> {
+    let output = Command::new("git")
+        .args(["-C", dir, "log", "-1", "--format=%at"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    str::from_utf8(&output.stdout)
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// Parse the textual output of `git status --porcelain=v2`.
