@@ -592,7 +592,10 @@ fn parse_v2_changed(snap: &mut StatusSnapshot, rest: &str) {
     // `xy[0] != ' '` check and every unstaged file appears staged.
     let x = normalise_v2_status(bytes[0] as char);
     let y = normalise_v2_status(bytes[1] as char);
-    if let Some(path) = rest.split_whitespace().nth(7) {
+    // Path is the 8th field and may itself contain spaces: splitn so the
+    // remainder is kept whole (`split_whitespace().nth(7)` truncated
+    // "my file.rs" to "my").
+    if let Some(path) = rest.splitn(8, ' ').nth(7) {
         snap.files.push(FileSnapshot {
             path: path.to_string(),
             xy: [x, y],
@@ -607,9 +610,10 @@ fn parse_v2_renamed(snap: &mut StatusSnapshot, rest: &str) {
     let bytes = rest.as_bytes();
     let x = normalise_v2_status(bytes[0] as char);
     let y = normalise_v2_status(bytes[1] as char);
-    // The 9th whitespace-separated token is `<path>\t<origPath>`. Take only
-    // the part before the tab — the new path is what we show in the UI.
-    if let Some(field) = rest.split_whitespace().nth(8) {
+    // The 9th space-delimited field is `<path>\t<origPath>` (path may
+    // contain spaces — hence `splitn`). Take only the part before the tab:
+    // the new path is what we show in the UI.
+    if let Some(field) = rest.splitn(9, ' ').nth(8) {
         let path = field.split('\t').next().unwrap_or(field);
         snap.files.push(FileSnapshot {
             path: path.to_string(),
@@ -625,7 +629,7 @@ fn parse_v2_unmerged(snap: &mut StatusSnapshot, rest: &str) {
     let bytes = rest.as_bytes();
     let x = normalise_v2_status(bytes[0] as char);
     let y = normalise_v2_status(bytes[1] as char);
-    if let Some(path) = rest.split_whitespace().nth(9) {
+    if let Some(path) = rest.splitn(10, ' ').nth(9) {
         snap.files.push(FileSnapshot {
             path: path.to_string(),
             xy: [x, y],
@@ -895,6 +899,38 @@ mod tests {
         // First line has only 1 char after prefix; must not panic.
         let s = parse_porcelain_v2("# branch.head main\n1 M\n");
         assert!(s.files.is_empty());
+    }
+
+    #[test]
+    fn parse_v2_path_with_spaces_is_preserved() {
+        // Regression: split_whitespace truncated "my file.rs" to "my".
+        let s = parse_porcelain_v2(
+            "# branch.head main\n\
+             1 .M N... 100644 100644 100644 hash hash my docs/report final.rs\n",
+        );
+        assert_eq!(s.files.len(), 1);
+        assert_eq!(s.files[0].path, "my docs/report final.rs");
+    }
+
+    #[test]
+    fn parse_v2_renamed_path_with_spaces() {
+        let s = parse_porcelain_v2(
+            "# branch.head main\n\
+             2 R. N... 100644 100644 100644 hash hash R100 new name.rs\told name.rs\n",
+        );
+        assert_eq!(s.files.len(), 1);
+        assert_eq!(s.files[0].path, "new name.rs");
+    }
+
+    #[test]
+    fn parse_v2_unmerged_path_with_spaces() {
+        let s = parse_porcelain_v2(
+            "# branch.head main\n\
+             u UU N... 100644 100644 100644 100644 hash hash hash my conflicted.rs\n",
+        );
+        assert_eq!(s.files.len(), 1);
+        assert_eq!(s.files[0].path, "my conflicted.rs");
+        assert_eq!(s.files[0].xy, ['U', 'U']);
     }
 
     // ── FileSnapshot::status ──
