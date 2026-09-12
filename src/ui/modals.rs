@@ -404,6 +404,46 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
 
 // ── Docs Modal ─────────────────────────────────────────────────────
 
+/// Reference lines shown by `/docs`. A static (not built inside the
+/// draw function) so tests can lock in the security wording — in
+/// particular that `/remove-repo` is documented as asking confirmation
+/// and never regresses to the old "(no confirm!)" text.
+pub(crate) const DOCS_LINES: &[&str] = &[
+    "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
+    "",
+    "\u{2699} Change Management",
+    "  Space (select file)  Toggle stage/unstage a single file",
+    "  a  /  /stage-all      Stage all changes (git add .)",
+    "  u  /  /unstage-all    Unstage everything (git reset HEAD)",
+    "  c  /  /commit <msg>   Create a commit; auto-stages if needed",
+    "  r  /  /undo-commit    Undo last commit (soft reset)",
+    "",
+    "\u{2699} Branches & Remote",
+    "  b  /  /branches       List all branches",
+    "  n  /  /branch <name>  Create new branch and switch to it",
+    "  /switch <name>        Switch to an existing branch",
+    "  o  /  /remote <url>   Change the 'origin' remote URL",
+    "",
+    "\u{2699} Sync (fetch/pull/push)",
+    "  f  /  /fetch          Download remote metadata (no merge)",
+    "  l  /  /pull           Download + merge remote changes",
+    "  p  /  /push           Push local commits to remote",
+    "",
+    "\u{2699} Stash",
+    "  s  /  /stash          Stash local changes away",
+    "  d  /  /stash-pop      Restore changes from the stash",
+    "",
+    "\u{2699} Configuration",
+    "  /config <k> [v]       Read or set local repo config",
+    "  /config-global <k><v> Set global config (~/.gitconfig)",
+    "",
+    "\u{2699} Other",
+    "  t  /  /themes        Open visual theme picker",
+    "  /remove-repo         Delete .git directory (asks confirmation)",
+    "  /docs               This detailed reference",
+    "  ?  /  /help          Quick shortcut help",
+];
+
 pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
     let area = f.area();
     let mw = 68u16;
@@ -415,45 +455,9 @@ pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
     let inner = draw_modal_frame(f, modal, s.theme.surface, s.theme.primary);
     draw_modal_title(f, modal, " \u{1F4D6} Detailed Shortcut Reference ", s.theme.surface, s.theme.accent);
 
-    let doc_lines: Vec<&str> = vec![
-        "\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}\u{2501}",
-        "",
-        "\u{2699} Change Management",
-        "  Space (select file)  Toggle stage/unstage a single file",
-        "  a  /  /stage-all      Stage all changes (git add .)",
-        "  u  /  /unstage-all    Unstage everything (git reset HEAD)",
-        "  c  /  /commit <msg>   Create a commit; auto-stages if needed",
-        "  r  /  /undo-commit    Undo last commit (soft reset)",
-        "",
-        "\u{2699} Branches & Remote",
-        "  b  /  /branches       List all branches",
-        "  n  /  /branch <name>  Create new branch and switch to it",
-        "  /switch <name>        Switch to an existing branch",
-        "  o  /  /remote <url>   Change the 'origin' remote URL",
-        "",
-        "\u{2699} Sync (fetch/pull/push)",
-        "  f  /  /fetch          Download remote metadata (no merge)",
-        "  l  /  /pull           Download + merge remote changes",
-        "  p  /  /push           Push local commits to remote",
-        "",
-        "\u{2699} Stash",
-        "  s  /  /stash          Stash local changes away",
-        "  d  /  /stash-pop      Restore changes from the stash",
-        "",
-        "\u{2699} Configuration",
-        "  /config <k> [v]       Read or set local repo config",
-        "  /config-global <k><v> Set global config (~/.gitconfig)",
-        "",
-        "\u{2699} Other",
-        "  t  /  /themes        Open visual theme picker",
-        "  /remove-repo         Delete .git directory (asks confirmation)",
-        "  /docs               This detailed reference",
-        "  ?  /  /help          Quick shortcut help",
-    ];
-
     let cy = inner.y;
     f.render_widget(
-        Paragraph::new(doc_lines.join("\n"))
+        Paragraph::new(DOCS_LINES.join("\n"))
             .style(Style::default().fg(s.theme.foreground).bg(s.theme.surface)),
         Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height },
     );
@@ -782,4 +786,74 @@ pub fn draw_commit_modal(f: &mut Frame, s: &mut AppState) {
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::state::command::Command;
+
+    fn docs_line_for(cmd: &str) -> Option<&'static str> {
+        DOCS_LINES.iter().copied().find(|l| l.trim_start().starts_with(cmd))
+    }
+
+    /// Regression for the security issue in the original plan (§1.3.1):
+    /// `/remove-repo` must never be documented as skipping confirmation
+    /// again. The modal flow (`cmd_remove_repo` → `show_confirm_remove`
+    /// → `handle_confirm_remove_key`) requires an explicit y/N answer.
+    #[test]
+    fn docs_never_say_remove_repo_has_no_confirmation() {
+        for line in DOCS_LINES {
+            assert!(
+                !line.to_ascii_lowercase().contains("no confirm"),
+                "docs line advertises a no-confirmation delete: {line:?}"
+            );
+        }
+        let remove_line = docs_line_for("/remove-repo").expect("/remove-repo documented");
+        assert!(
+            remove_line.contains("asks confirmation"),
+            "docs must state the confirmation requirement: {remove_line:?}"
+        );
+    }
+
+    #[test]
+    fn help_table_marks_remove_repo_as_confirmed() {
+        let entry = Command::HELP
+            .iter()
+            .find(|(cmd, _)| cmd.starts_with("/remove-repo"))
+            .expect("/remove-repo in HELP");
+        assert!(
+            entry.1.contains("confirmation") && !entry.1.contains("no confirm"),
+            "HELP entry must state confirmation: {:?}",
+            entry.1
+        );
+    }
+
+    #[test]
+    fn remove_repo_command_parses_and_only_ever_shows_modal() {
+        // Static invariant: the parser maps the literal to RemoveRepo,
+        // whose dispatcher arm (cmd_remove_repo) has no git write call.
+        // `git_remove_repo` must therefore only be reachable from the
+        // confirm-remove keyboard handler.
+        assert_eq!(
+            Command::parse("/remove-repo").unwrap(),
+            Command::RemoveRepo
+        );
+        let src = include_str!("state/commands.rs");
+        let remove_fn = src
+            .split("fn cmd_remove_repo")
+            .nth(1)
+            .expect("cmd_remove_repo exists")
+            .split("\n    fn ")
+            .next()
+            .expect("function body bounded");
+        assert!(
+            !remove_fn.contains("git_remove_repo("),
+            "cmd_remove_repo must NOT delete directly; it only opens the modal"
+        );
+        assert!(
+            remove_fn.contains("show_confirm_remove = true"),
+            "cmd_remove_repo must open the confirmation modal"
+        );
+    }
 }
