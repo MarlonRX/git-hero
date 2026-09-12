@@ -281,4 +281,58 @@ mod tests {
         };
         assert_eq!(scan.dirty_count(), 2);
     }
+
+    /// Real-environment smoke test for the scan pipeline: builds a temp
+    /// "projects" folder with two git repos (one dirty, one with a newer
+    /// commit) and asserts detection, dirty counting and activity ordering.
+    /// Ignored by default because it spawns `git init` and changes the
+    /// process working directory. Run with: `cargo test -- --ignored`.
+    #[test]
+    #[ignore]
+    fn scan_finds_sibling_repos_sorted_by_activity() {
+        use std::process::Command;
+
+        let base = std::env::temp_dir().join(format!("gith-scan-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+
+        let make_repo = |name: &str, dirty: bool, msg: &str| {
+            let dir = base.join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            let git = |args: &[&str]| {
+                let out = Command::new("git")
+                    .args(["-C", dir.to_str().unwrap()])
+                    .args(args)
+                    .output()
+                    .unwrap();
+                assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+            };
+            git(&["init", "-b", "main"]);
+            git(&["config", "user.email", "t@t"]);
+            git(&["config", "user.name", "t"]);
+            std::fs::write(dir.join("f.txt"), msg).unwrap();
+            git(&["add", "."]);
+            git(&["commit", "-m", msg]);
+            if dirty {
+                std::fs::write(dir.join("junk.txt"), "untracked").unwrap();
+            }
+            // A non-repo sibling must be ignored.
+            std::fs::create_dir_all(base.join("not-a-repo")).ok();
+        };
+        make_repo("app-old", false, "old commit");
+        make_repo("app-new", true, "new commit");
+
+        let prev = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&base).unwrap();
+        let scan = scan_sibling_repos();
+        std::env::set_current_dir(prev).unwrap();
+        let _ = std::fs::remove_dir_all(&base);
+
+        let names: Vec<&str> = scan.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["app-new", "app-old"], "newest activity first, non-repos skipped");
+        assert_eq!(scan.dirty_count(), 1);
+        assert_eq!(scan.entries[0].dirty, 1);
+        assert_eq!(scan.entries[0].branch, "main");
+        assert_eq!(scan.entries[1].dirty, 0);
+    }
 }
