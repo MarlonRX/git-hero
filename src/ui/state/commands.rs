@@ -59,13 +59,10 @@ impl AppState {
     /// commands both produce a user-friendly `status_message`.
     pub fn execute_command(&mut self, input: &str) {
         match Command::parse(input) {
-            Err(e) => {
-                self.status_message = format!("{}: {} (input: {})", e.reason, e.input, e.reason);
-                // Above is awkward — fall back to a simpler message:
-                self.status_message = format!("{} ({})", e.reason, e.input);
-            }
+            Err(e) => self.status_message = e.to_string(),
             Ok(Command::Unknown(input)) => {
-                self.status_message = format!("Unknown command: {}. Type /help.", input);
+                self.status_message =
+                    trf(&self.language, "status_unknown_cmd", &[&input]);
             }
             Ok(cmd) => self.dispatch(cmd),
         }

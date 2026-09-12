@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 use crate::config::{load_config, Config};
 use crate::git;
+use crate::i18n::translate;
 use crate::log;
 use crate::theme::{get_theme_by_name, Theme};
 
@@ -199,7 +200,7 @@ impl AppState {
             theme,
             language: config.language.clone(),
             nerd_font: config.nerd_font,
-            status_message: "Ready. Press ? for help.".to_string(),
+            status_message: translate(&config.language, "ready_short").into_owned(),
             fetching: false,
             files: Vec::new(),
             selected_file_idx: 0,
@@ -273,7 +274,8 @@ impl AppState {
 
         if config.language.is_empty() {
             state.setup_step = 1;
-            state.status_message = "Welcome! Please configure Git Hero.".to_string();
+            state.status_message =
+                translate(&state.language, "welcome_setup").into_owned();
         } else {
             state.refresh_git_status();
         }
@@ -347,7 +349,8 @@ impl AppState {
                 self.flat_entries.clear();
                 self.commits.clear();
                 self.active_diff.clear();
-                self.status_message = "Warning: Not a Git repository.".to_string();
+                self.status_message =
+                    translate(&self.language, "warn_not_repo").into_owned();
             }
             Err(e) => {
                 // We are inside a repo (git answered) but status failed

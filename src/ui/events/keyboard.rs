@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::config::{load_config, save_config, Config};
 use crate::git;
-use crate::i18n::translate;
+use crate::i18n::{translate, trf};
 use crate::theme::{get_theme_by_name, get_themes};
 use crate::ui::state::AppState;
 
@@ -84,7 +84,7 @@ pub fn handle_theme_modal_key(code: KeyCode, s: &mut AppState) {
                 theme: s.theme.name.to_string(),
                 skipped_version: existing_skipped,
             });
-            s.status_message = format!("Theme changed to: {}", s.theme.name);
+            s.status_message = trf(&s.language, "status_theme_changed", &[s.theme.name]);
         }
         _ => {}
     }
@@ -440,13 +440,13 @@ pub fn handle_confirm_remove_key(code: KeyCode, s: &mut AppState) {
                         translate(&s.language, "status_remove_ok").into_owned();
                 }
                 Err(e) => {
-                    s.status_message = format!("Error removing repo: {e}");
+                    s.status_message = trf(&s.language, "status_err_remove_repo", &[&e]);
                 }
             }
         }
         KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
             s.show_confirm_remove = false;
-            s.status_message = "Repository removal cancelled.".to_string();
+            s.status_message = translate(&s.language, "status_remove_cancelled").into_owned();
         }
         _ => {}
     }

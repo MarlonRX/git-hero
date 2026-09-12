@@ -393,11 +393,7 @@ pub fn draw_help_modal(f: &mut Frame, s: &mut AppState) {
         Rect { x: inner.x + 1, y: cy, width: inner.width - 2, height: inner.height - 2 },
     );
 
-    let footer = if s.language == "es" {
-        "?/Esc Cerrar | q Salir | / Barra de comandos"
-    } else {
-        "?/Esc Close | q Quit | / Cmd bar"
-    };
+    let footer = translate(&s.language, "modal_close_keys");
     f.render_widget(
         Paragraph::new(footer)
             .alignment(Alignment::Center)
@@ -463,7 +459,7 @@ pub fn draw_docs_modal(f: &mut Frame, s: &mut AppState) {
     );
 
     f.render_widget(
-        Paragraph::new("Press any key to close.")
+        Paragraph::new(translate(&s.language, "modal_close_hint").into_owned())
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.primary).bg(s.theme.surface)),
         Rect { x: inner.x, y: inner.y + inner.height - 1, width: inner.width, height: 1 },

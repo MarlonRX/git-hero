@@ -99,7 +99,11 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
                     state.console_running = false;
                     match res {
                         Ok(_) => {
-                            state.status_message = "Command completed successfully.".to_string();
+                            state.status_message = crate::i18n::translate(
+                                &state.language,
+                                "status_success",
+                            )
+                            .into_owned();
                         }
                         Err(e) => {
                             state.status_message = format!("Error: {}", e);

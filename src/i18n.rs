@@ -101,6 +101,10 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "footer_help" => "? Help | q Quit",
     "input_placeholder" => "Type a command...",
     "modal_close_hint" => "Press any key to close.",
+    "modal_close_keys" => "?/Esc Close | q Quit | / Cmd bar",
+    "warn_not_repo" => "Warning: Not a Git repository.",
+    "ready_short" => "Ready. Press ? for help.",
+    "welcome_setup" => "Welcome! Please configure Git Hero.",
     // ── Update modal keys ─────────────────────────────────────────
     "update_title" => "🚀 Update Available",
     "update_new_version" => "A new version of Git Hero is available: v{}",
@@ -111,6 +115,7 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     // ── /language command keys ────────────────────────────────────
     "status_language_changed" => "Language changed to: {}",
     "status_language_same" => "Language is already {}",
+    "status_unknown_cmd" => "Unknown command: {}. Type /help.",
     // ── Repo-overview (multi-repo manager) keys ───────────────────
     "repo_overview_title" => " Repository Overview ",
     "repo_overview_help" => "[↑/↓] Select  [Enter] Open  [g] Rescan  [Esc] Close",
@@ -207,6 +212,10 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "footer_help" => "? Ayuda | q Salir",
     "input_placeholder" => "Escribe un comando...",
     "modal_close_hint" => "Presiona cualquier tecla para cerrar.",
+    "modal_close_keys" => "?/Esc Cerrar | q Salir | / Barra de comandos",
+    "warn_not_repo" => "Advertencia: No es un repositorio Git.",
+    "ready_short" => "Listo. Presiona ? para ayuda.",
+    "welcome_setup" => "¡Bienvenido! Configura Git Hero.",
     "update_title" => "🚀 Actualización Disponible",
     "update_new_version" => "Una nueva versión de Git Hero está disponible: v{}",
     "update_current_version" => "Versión actual: v{}",
@@ -215,6 +224,7 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "update_skip" => "No volver a mostrar esta versión",
     "status_language_changed" => "Idioma cambiado a: {}",
     "status_language_same" => "El idioma ya es {}",
+    "status_unknown_cmd" => "Comando desconocido: {}. Escribe /help.",
     "repo_overview_title" => " Resumen de Repositorios ",
     "repo_overview_help" => "[↑/↓] Seleccionar  [Enter] Abrir  [g] Reescanear  [Esc] Cerrar",
     "repo_overview_summary" => "{} de {} repos tienen cambios sin commitear",

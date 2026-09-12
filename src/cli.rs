@@ -1,4 +1,18 @@
+//! Non-interactive "git flow" CLI (`gith -cli`).
+//!
+//! All user-facing strings go through [`crate::i18n`] — the same dictionary
+//! the TUI uses. The bilingual `if lang == "es"` pairs that used to live
+//! here are gone (Phase 3 / i18n unification): the CLI and the TUI now show
+//! identical phrasing for identical states, from one source of truth.
+//!
+//! The ANSI palette below is CLI-only by design: the TUI renders through
+//! ratatui styles (`theme.rs`), while raw escape codes are the only option
+//! here. They are single-owned by this module — not a duplication of the
+//! theme, which carries no ANSI codes.
+
 use std::io::{self, Write};
+
+use crate::i18n::{translate, trf};
 
 const GREEN: &str = "\x1b[0;32m";
 const BLUE: &str = "\x1b[0;34m";
@@ -41,12 +55,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     if !crate::git::is_inside_work_tree() {
-        eprintln!(
-            "{}  ✖  {} (Not inside a git repository).{}",
-            RED,
-            crate::i18n::translate(lang, "not_git_repo"),
-            NC
-        );
+        eprintln!("{}  ✖  {}{}", RED, translate(lang, "not_git_repo"), NC);
         return Err("not inside a git repository".into());
     }
 
@@ -55,16 +64,25 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("{}", sep);
     println!(
-        "{}  GIT FLOW  {} {}{} {}→{} {}{}{}",
-        BOLD, NC, CYAN, branch, BLUE, NC, CYAN, remote, NC
+        "{}  {}  {} {}{} {}→{} {}{}{}",
+        BOLD,
+        translate(lang, "git_flow_title"),
+        NC,
+        CYAN,
+        branch,
+        BLUE,
+        NC,
+        CYAN,
+        remote,
+        NC
     );
     println!("{}", sep);
     println!();
 
     println!(
-        "{}  🔍 {}...{}",
+        "{}  🔍 {}{}",
         BLUE,
-        crate::i18n::translate(lang, "status_fetching"),
+        translate(lang, "status_fetching"),
         NC
     );
     let _ = crate::git::fetch_remote(&remote, &branch);
@@ -75,7 +93,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}  ┌─ {}: {}/{}{}",
         CYAN,
-        crate::i18n::translate(lang, "repo_status"),
+        translate(lang, "repo_status"),
         remote,
         branch,
         NC
@@ -83,7 +101,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}  ├─ {}: {}{} commit(s){}",
         CYAN,
-        if lang == "es" { "Adelante" } else { "Ahead" },
+        translate(lang, "ahead_label"),
         GREEN,
         ahead,
         NC
@@ -91,7 +109,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "{}  └─ {}: {}{} commit(s){}",
         CYAN,
-        if lang == "es" { "Detrás" } else { "Behind" },
+        translate(lang, "behind_label"),
         YELLOW,
         behind,
         NC
@@ -113,27 +131,14 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
         let is_staged_empty = crate::git::run_git(&["diff", "--cached", "--quiet"]).is_ok();
         if is_staged_empty {
             println!(
-                "{}  ℹ  {} (No changes staged).{}",
+                "{}  ℹ  {}{}",
                 CYAN,
-                if lang == "es" {
-                    "Sin cambios para commit"
-                } else {
-                    "No changes for commit"
-                },
+                translate(lang, "no_changes_to_commit"),
                 NC
             );
         } else {
             println!();
-            println!(
-                "{}  💬 {}:{}",
-                BOLD,
-                if lang == "es" {
-                    "Mensaje del commit"
-                } else {
-                    "Commit message"
-                },
-                NC
-            );
+            println!("{}  💬 {}{}", BOLD, translate(lang, "commit_message_label"), NC);
             print!("  {}→{} ", BLUE, NC);
             let _ = io::stdout().flush();
             let mut commit_msg = String::new();
@@ -142,13 +147,9 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
             if commit_msg.is_empty() {
                 println!();
                 println!(
-                    "{}  ✖  {} (Empty message, cancelled).{}",
+                    "{}  ✖  {}{}",
                     RED,
-                    if lang == "es" {
-                        "Mensaje vacío, cancelado"
-                    } else {
-                        "Empty message, cancelled"
-                    },
+                    translate(lang, "empty_message_cancelled"),
                     NC
                 );
                 return Err("empty commit message".into());
@@ -157,14 +158,19 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
             println!();
             println!("{}  📝 git commit -m \"{}\"{}", BLUE, commit_msg, NC);
             if let Err(e) = crate::git::git_commit(commit_msg) {
-                eprintln!("{}  ✖  Error committing: {}{}", RED, e, NC);
+                eprintln!(
+                    "{}  ✖  {}{}",
+                    RED,
+                    trf(lang, "status_err_commit", &[&e]),
+                    NC
+                );
                 return Err(format!("git commit failed: {e}").into());
             }
 
             println!(
-                "{}  ✔  {} (Commit created).{}",
+                "{}  ✔  {}{}",
                 GREEN,
-                crate::i18n::translate(lang, "status_commit_success"),
+                translate(lang, "status_commit_success"),
                 NC
             );
             did_commit = true;
@@ -176,11 +182,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "{}  ℹ  {}.{}",
             CYAN,
-            if lang == "es" {
-                "Sin cambios pendientes para commit"
-            } else {
-                "No pending changes for commit"
-            },
+            translate(lang, "no_pending_changes"),
             NC
         );
     }
@@ -189,28 +191,23 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     if behind > 0 {
         println!();
         println!(
-            "{}  ⚠  {} (Remote is ahead by {} commit(s)).{}",
+            "{}  ⚠  {} ↓{}{}",
             YELLOW,
-            if lang == "es" {
-                "El remoto tiene cambios"
-            } else {
-                "Remote has changes"
-            },
+            translate(lang, "remote_has_changes"),
             behind,
             NC
         );
-        let pull_prompt = if lang == "es" { "¿Hacer pull?" } else { "Do pull?" };
-        if confirm_action(pull_prompt) {
+        if confirm_action(&translate(lang, "do_pull")) {
             println!();
             println!("{}  ⬇  git pull {} {}{}", BLUE, remote, branch, NC);
             if let Err(e) = crate::git::git_pull(&remote, &branch) {
-                eprintln!("{}  ✖  Error pulling: {}{}", RED, e, NC);
+                eprintln!("{}  ✖  {}{}", RED, trf(lang, "cli_err_pull", &[&e]), NC);
                 return Err(format!("git pull failed: {e}").into());
             }
             println!(
-                "{}  ✔  {} (Pull completed).{}",
+                "{}  ✔  {}{}",
                 GREEN,
-                if lang == "es" { "Pull completado" } else { "Pull completed" },
+                translate(lang, "pull_completed"),
                 NC
             );
             let new_ahead = crate::git::get_commits_ahead(&remote, &branch);
@@ -219,13 +216,9 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     } else if !did_commit && !has_unpushed {
         println!();
         println!(
-            "{}  ✔  {} (Up to date with remote).{}",
+            "{}  ✔  {}{}",
             GREEN,
-            if lang == "es" {
-                "Estás al día con el remoto"
-            } else {
-                "You are up to date with remote"
-            },
+            translate(lang, "up_to_date_with_remote"),
             NC
         );
     }
@@ -233,29 +226,24 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     // PUSH
     if has_unpushed {
         println!();
-        let push_prompt = if lang == "es" { "¿Hacer push?" } else { "Do push?" };
-        if confirm_action(push_prompt) {
+        if confirm_action(&translate(lang, "do_push")) {
             println!();
             println!("{}  ⬆  git push {} {}{}", BLUE, remote, branch, NC);
             if let Err(e) = crate::git::git_push(&remote, &branch) {
-                eprintln!("{}  ✖  Error pushing: {}{}", RED, e, NC);
+                eprintln!("{}  ✖  {}{}", RED, trf(lang, "cli_err_push", &[&e]), NC);
                 return Err(format!("git push failed: {e}").into());
             }
             println!(
-                "{}  ✔  {} (Push completed).{}",
+                "{}  ✔  {}{}",
                 GREEN,
-                if lang == "es" { "Push completado" } else { "Push completed" },
+                translate(lang, "push_completed"),
                 NC
             );
         } else {
             println!(
-                "{}  📌 {} (Local commits kept, no push).{}",
+                "{}  📌 {}{}",
                 CYAN,
-                if lang == "es" {
-                    "Commits locales guardados, sin push"
-                } else {
-                    "Local commits kept, no push"
-                },
+                translate(lang, "local_commits_kept"),
                 NC
             );
         }
@@ -263,7 +251,7 @@ pub fn run_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     println!("{}", sep);
-    println!("{}  ✅  {} (Done!).{}", GREEN, BOLD, NC);
+    println!("{}  ✅  {}{}{}", GREEN, BOLD, translate(lang, "status_success"), NC);
     println!("{}", sep);
     println!();
 
@@ -280,5 +268,43 @@ mod tests {
         // the function compiles and returns a bool. Manual coverage for
         // the y/N branch logic via shell test.
         let _ = confirm_action;
+    }
+
+    #[test]
+    fn every_key_used_by_the_cli_exists_in_both_dictionaries() {
+        // The CLI must never reintroduce hardcoded bilingual pairs: any key
+        // listed here has EN *and* ES values (i18n has its own parity test,
+        // this one guards against a key being renamed out from under cli.rs).
+        const CLI_KEYS: &[&str] = &[
+            "not_git_repo",
+            "git_flow_title",
+            "status_fetching",
+            "repo_status",
+            "ahead_label",
+            "behind_label",
+            "no_changes_to_commit",
+            "commit_message_label",
+            "empty_message_cancelled",
+            "status_commit_success",
+            "status_err_commit",
+            "no_pending_changes",
+            "remote_has_changes",
+            "do_pull",
+            "cli_err_pull",
+            "pull_completed",
+            "up_to_date_with_remote",
+            "do_push",
+            "cli_err_push",
+            "push_completed",
+            "local_commits_kept",
+            "status_success",
+        ];
+        for key in CLI_KEYS {
+            // A missing key degrades to the key itself — detect that and fail.
+            for lang in ["en", "es"] {
+                let value = crate::i18n::translate(lang, key);
+                assert_ne!(&*value, *key, "key {key} missing in {lang} dict");
+            }
+        }
     }
 }

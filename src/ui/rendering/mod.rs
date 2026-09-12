@@ -9,6 +9,7 @@ use ratatui::{
 pub mod components;
 pub mod panels;
 
+use crate::i18n::translate;
 use crate::ui::state::AppState;
 use crate::version;
 
@@ -235,11 +236,7 @@ fn draw_footer(f: &mut Frame, footer: Rect, s: &AppState) {
         },
     );
 
-    let legend = if s.language == "es" {
-        "? Ayuda | q Salir"
-    } else {
-        "? Help | q Quit"
-    };
+    let legend = translate(&s.language, "footer_help").into_owned();
     let llen = legend.chars().count() as u16;
     f.render_widget(
         Paragraph::new(legend)
@@ -295,7 +292,7 @@ fn draw_command_bar(f: &mut Frame, outer: Rect, s: &AppState) {
     // Text
     let display = if s.input_value.is_empty() {
         ratatui::text::Span::styled(
-            "Type a command...",
+            translate(&s.language, "input_placeholder").into_owned(),
             Style::default()
                 .fg(s.theme.dimmed)
                 .bg(s.theme.primary),
