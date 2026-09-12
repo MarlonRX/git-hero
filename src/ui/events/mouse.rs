@@ -49,19 +49,17 @@ pub fn mouse_init_wizard(_col: u16, row: u16, s: &mut AppState, inner: Rect) {
                 else if idx == 1 { s.init_branch_name = "master".into(); s.init_wizard_step = 2; s.input_value.clear(); }
             }
         }
-        3 => {
-            if clicked == 7 {
-                s.init_wizard_active = false;
-                let _ = git::run_git(&["init"]);
-                let _ = git::run_git(&["checkout", "-b", &s.init_branch_name]);
-                if !s.init_remote_url.is_empty() {
-                    let _ = git::run_git(&["remote", "add", "origin", &s.init_remote_url]);
-                }
-                let _ = git::git_add_all();
-                let _ = git::git_commit("Initial commit");
-                s.refresh_git_status();
-                s.status_message = "Git repository initialized successfully!".to_string();
+        3 if clicked == 7 => {
+            s.init_wizard_active = false;
+            let _ = git::run_git(&["init"]);
+            let _ = git::run_git(&["checkout", "-b", &s.init_branch_name]);
+            if !s.init_remote_url.is_empty() {
+                let _ = git::run_git(&["remote", "add", "origin", &s.init_remote_url]);
             }
+            let _ = git::git_add_all();
+            let _ = git::git_commit("Initial commit");
+            s.refresh_git_status();
+            s.status_message = "Git repository initialized successfully!".to_string();
         }
         _ => {}
     }

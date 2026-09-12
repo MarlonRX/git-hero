@@ -655,7 +655,9 @@ pub fn log_snapshot(limit: usize) -> Result<Vec<LogEntry>, crate::git_error::Git
 fn parse_log_nul(text: &str) -> Vec<LogEntry> {
     let parts: Vec<&str> = text.split('\0').filter(|s| !s.is_empty()).collect();
     parts
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|c| LogEntry {
             hash: c[0].to_string(),
             date: c[1].to_string(),
@@ -675,10 +677,8 @@ pub fn check_latest_version() -> Result<String, crate::git_error::GitError> {
         "ls-remote",
         "--tags",
         "https://github.com/MarlonRX/git-hero",
-    ]) {
-        if let Some(version) = parse_version_from_ls_remote(&output) {
-            return Ok(version);
-        }
+    ]) && let Some(version) = parse_version_from_ls_remote(&output) {
+        return Ok(version);
     }
 
     // Fallback: use HTTP to query GitHub API (works without git in PATH)

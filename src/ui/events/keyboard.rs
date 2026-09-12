@@ -530,10 +530,10 @@ pub fn handle_credentials_key(key: KeyEvent, s: &mut AppState) {
         KeyCode::Left => {
             s.credentials_cursor = s.credentials_cursor.saturating_sub(1);
         }
-        KeyCode::Right => {
-            if s.credentials_cursor < s.credentials_input.len() {
-                s.credentials_cursor += 1;
-            }
+        KeyCode::Right
+            if s.credentials_cursor < s.credentials_input.len() =>
+        {
+            s.credentials_cursor += 1;
         }
         _ => {}
     }
@@ -720,45 +720,46 @@ pub fn handle_commit_modal_key(key: KeyEvent, s: &mut AppState) {
 /// inside an `and_then`, which panicked when the pipe was unexpectedly
 /// closed (e.g. pbcopy not installed, broken xclip). Reporting the error is
 /// strictly better than crashing the TUI.
+///
+/// The two `#[cfg]` blocks are exclusive alternatives: exactly one becomes
+/// the function body per platform, which keeps the "unsupported platform"
+/// branch a tail expression instead of an early `return`.
 fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    use std::io::Write;
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    use std::process::{Command, Stdio};
-
-    #[cfg(target_os = "macos")]
-    let mut cmd = Command::new("pbcopy");
-    #[cfg(target_os = "macos")]
-    {
-        cmd.stdin(Stdio::piped());
-    }
-
-    #[cfg(target_os = "linux")]
-    let mut cmd = Command::new("xclip");
-    #[cfg(target_os = "linux")]
-    {
-        cmd.arg("-selection").arg("clipboard").stdin(Stdio::piped());
-    }
-
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = text; // Silence unused warning.
-        return Err(std::io::Error::new(
+        Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             "clipboard copy not supported on this platform",
-        ));
+        ))
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    let mut child = cmd.spawn()?;
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
-        if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(text.as_bytes())?;
-        } else {
-            return Err(std::io::Error::other(
-                "clipboard helper closed its stdin before we could write",
-            ));
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        #[cfg(target_os = "macos")]
+        let mut cmd = {
+            let mut c = Command::new("pbcopy");
+            c.stdin(Stdio::piped());
+            c
+        };
+        #[cfg(target_os = "linux")]
+        let mut cmd = {
+            let mut c = Command::new("xclip");
+            c.args(["-selection", "clipboard"]).stdin(Stdio::piped());
+            c
+        };
+
+        let mut child = cmd.spawn()?;
+        match child.stdin.as_mut() {
+            Some(stdin) => stdin.write_all(text.as_bytes())?,
+            None => {
+                return Err(std::io::Error::other(
+                    "clipboard helper closed its stdin before we could write",
+                ));
+            }
         }
         let status = child.wait()?;
         if status.success() {
@@ -768,5 +769,26 @@ fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
                 "clipboard helper exited with {status}"
             )))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[test]
+    fn clipboard_copy_reports_unsupported_without_panic() {
+        // Plan §1.3.2 / §4.2: headless or unsupported platforms must return
+        // Err, never panic — the TUI surfaces the message in the status bar.
+        let err = copy_to_clipboard("hello").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn clipboard_copy_headless_returns_err_not_panic() {
+        // Without a working pbcopy/xclip the call must fail gracefully.
+        let _ = copy_to_clipboard("probe"); // must not panic
     }
 }

@@ -147,9 +147,11 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
     // Build left side spans: version · branch icon+name · behind/ahead
     let mut left_spans: Vec<ratatui::text::Span> = Vec::new();
 
-    // Version badge
+    // Version badge. `full()` == `short()` on release builds but adds
+    // `-dev`/dirty/hash markers locally, so screenshots from dev runs are
+    // honestly distinguishable from shipped binaries.
     left_spans.push(ratatui::text::Span::styled(
-        format!(" {} ", version::short()),
+        format!(" {} ", version::full()),
         Style::default().fg(s.theme.background).bg(s.theme.accent).add_modifier(Modifier::BOLD),
     ));
     left_spans.push(ratatui::text::Span::raw("  "));
