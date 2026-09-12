@@ -2,40 +2,82 @@
 
 > **[English](#english)** · **[Español](#español)**
 
-A fast and visual Terminal UI (TUI) for Git, written in **Rust** with [Ratatui](https://ratatui.rs/).  
-Run it with `gith`.
+**A simple repository *manager* for the terminal — not another Git client.**
+Written in **Rust** with [Ratatui](https://ratatui.rs/). Run it with `gith`.
 
-Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast, and read-only** to visualize your repository state and execute common Git actions.
+Git Hero's niche: you have dozens of repositories, and you mostly want to know
+**which ones have junk to commit, which are behind their remote, what branch is
+checked out, and when you last touched each one** — then jump in, do the chore,
+and move on. That's what `gith` is for.
+
+## The five everyday actions
+
+Everything in Git Hero serves the repository-manager story:
+
+| # | Action | How | Safety |
+|---|--------|-----|--------|
+| 1 | **See state** | files + side-by-side diff + history + `↑ahead/↓behind` badges | read-only, auto-refresh every 2 s |
+| 2 | **Commit** | `c` / `/commit` — stage & commit, multi-line message | confirmation-free but undoable (`r`) |
+| 3 | **Pull** | `l` / `/pull` | explicit y/N modal |
+| 4 | **Push** | `p` / `/push` | explicit y/N modal |
+| 5 | **Switch branch** | `/switch <name>` / `/branch` | instant, errors reported |
+
+Plus the manager glue: `/repos` (or `g`) opens a **Repository Overview** — a
+scan of all sibling repositories sorted by last activity, with a dirty-file
+count per repo and a global rescan key; press Enter to jump into any repo.
+
+```text
+┌┤  Repository Overview  ────────────────────────────────────────────────┐
+│  2 of 4 repos have uncommitted changes   ~/projects                    │
+│                                                                        │
+│   ▶ api-server          main          ↑2 ↓0  4 ✱       12m             │
+│     web-client          feat/dark     ↑0 ↓3  1 ✱        2h             │
+│     infra               main          ↑0 ↓0   ✓         3d             │
+│     dotfiles            master        ↑1 ↓0   ✓         2w             │
+│                                                                        │
+│     [↑/↓] Select   [Enter] Open   [g] Rescan   [Esc] Close             │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**What Git Hero is *not*:** an interactive-rebase tool, a blame viewer or a
+submodule IDE. For deep single-repo surgery use `lazygit`/`gitui` — we don't
+compete there and we won't grow features that break the "simple manager" story.
 
 ---
 
 ## English
 
-A fast and visual Terminal UI (TUI) application for managing Git, written in **Rust** with [Ratatui](https://ratatui.rs/).
-
-Inspired by tools like `lazygit` or `gitui`, but focused on being **simple, fast, and read-only** to visualize your repository state and execute common Git actions.
+A fast Terminal UI for **managing many Git repositories**: overview scan,
+state at a glance, quick repo-to-repo jumps, and the five actions above done
+comfortably. Bilingual (EN/ES), 10 themes, Nerd Font support, and a
+non-interactive `-cli` mode for scripting the same commit→pull→push flow.
 
 ---
 
 ## ✨ Features
 
+### Repository management (the niche)
+- **Repository Overview** (`g` or `/repos`): every sibling repo on one screen — branch, ahead/behind, dirty count, last-activity age — sorted by recency, jump in with Enter, `g` rescans
+- **Status at a glance**: header with branch, `↑ahead`/`↓behind` badges and working directory
+- **Auto-refresh** of the current repo every 2 seconds (zero git calls when nothing changed)
+
 ### Visualization
-- **Integrated header** with ASCII logo, version badge, branch, behind/ahead indicators, and working directory
 - **Files panel** with change indicators (modified, added, deleted, untracked)
 - **Side-by-side diff** between current state and HEAD to see changes at a glance
-- **Commit history** with expandable details
+- **Commit history** with expandable details and pushed/unpushed markers
 - **10 customizable themes** (Tokyo Night, Gruvbox Dark, Dracula, Nord, etc.)
+- **Bilingual UI** (English / Spanish), switch live with `/language en|es`
 - **Auto-update check** on startup via GitHub API
 
-### Git Actions
+### Git Actions (the five + helpers)
 - Stage/unstage individual files or all at once
-- Create commits with message
-- Undo last commit (with safety validation)
-- Push, pull, fetch
+- Create commits with a multi-line message editor
+- Push, pull, fetch (push/pull behind confirmation modals)
 - Create and switch between branches
+- Undo last commit (with safety validation)
 - Stash and stash pop
 - Configure remote
-- Remove repository (with double confirmation)
+- Remove repository `.git` — always behind a confirmation modal
 - Copy diff to clipboard
 
 ### Usage Modes
@@ -147,6 +189,7 @@ tail -f /tmp/git-hero-debug.log
 | `n` | Create new branch |
 | `o` | Configure remote |
 | `t` | Change theme |
+| `g` | Repository overview (`/repos`) |
 | `y` | Copy diff to clipboard |
 
 ### Other
@@ -198,7 +241,8 @@ gith/
         │   ├── mod.rs          # AppState, GitFile, GitCommit
         │   ├── command.rs      # Command parser and dispatch
         │   ├── commands.rs     # Command execution
-        │   ├── icons.rs        # Nerd Font / ASCII icon tables
+        │   ├── icons.rs        # Nerd Font / ASCII icon tables (phf)
+        │   ├── repos.rs        # Multi-repo scan (Repository Overview)
         │   └── suggestions.rs  # Command autocomplete
         ├── rendering/
         │   ├── mod.rs          # draw_ui(), header, footer
@@ -262,7 +306,7 @@ Git Hero checks for new versions on startup:
 | `dirs` | 6.0.0 | System home/config paths |
 | `serde` | 1.0.228 | Configuration serialization |
 | `serde_json` | 1.0.150 | JSON format for config |
-| `phf` | 0.11 | Static icon maps |
+| `phf` | 0.11 | Compile-time static maps (icons, i18n dictionaries) |
 
 ---
 
@@ -274,20 +318,46 @@ MIT
 
 ## Español
 
-Aplicación de terminal (TUI) rápida y visual para gestionar Git, escrita en **Rust** con [Ratatui](https://ratatui.rs/).
+**Git Hero es un *gestor* de repositorios para la terminal — no un cliente Git más.**
+Escrito en **Rust** con [Ratatui](https://ratatui.rs/). Se ejecuta con `gith`.
 
-Inspirada en herramientas como `lazygit` o `gitui`, pero enfocada en ser **simple, rápida y de solo lectura** para visualizar el estado de tu repositorio y ejecutar acciones comunes de Git.
+El nicho de Git Hero: tenés decenas de repos y lo que querés saber de un vistazo
+es **cuáles tienen basura sin commitear, cuáles están detrás de su remoto, qué
+rama está activa y cuándo los tocaste por última vez** — entrar, resolver la
+tarea y seguir. Las cinco acciones del día a día:
+
+| # | Acción | Cómo | Seguridad |
+|---|--------|------|-----------|
+| 1 | **Ver estado** | archivos + diff side-by-side + historial + badges `↑adelante/↓detrás` | solo lectura, auto-refresh cada 2 s |
+| 2 | **Commit** | `c` / `/commit` — stagea y commitea, mensaje multilínea | deshacible (`r`) |
+| 3 | **Pull** | `l` / `/pull` | modal de confirmación y/N explícito |
+| 4 | **Push** | `p` / `/push` | modal de confirmación y/N explícito |
+| 5 | **Cambiar de rama** | `/switch <nombre>` / `/branch` | instantáneo, errores reportados |
+
+Y la cola de gestor: `/repos` (o tecla `g`) abre el **Resumen de Repositorios** —
+escaneo de todos los repos hermanos ordenado por última actividad, con contador
+de archivos sin commitear por repo y tecla de reescaneo global; Enter salta al
+repo elegido.
+
+**Lo que Git Hero *no* es:** una herramienta de rebase interactivo, visor de
+blame ni IDE de submódulos. Para cirugía profunda de un repo usá `lazygit`/`gitui`
+— ahí no competimos.
 
 ---
 
 ## ✨ Características
 
+### Gestión de repositorios (el nicho)
+- **Resumen de Repositorios** (`g` o `/repos`): todos los repos hermanos en una pantalla — rama, adelante/detrás, archivos sucios, antigüedad — ordenados por actividad, Enter para entrar, `g` reescanea
+- **Estado de un vistazo**: rama, badges `↑adelante`/`↓detrás` y directorio actual
+- **Auto-refresco** del repo actual cada 2 segundos (cero llamadas a git si nada cambió)
+
 ### Visualización
-- **Header integrado** con logo ASCII, badge de versión, rama, indicadores behind/ahead y directorio de trabajo
 - **Panel de archivos** con indicadores de cambios (modificados, agregados, eliminados, sin trackear)
 - **Diff side-by-side** entre el estado actual y HEAD para ver los cambios de un vistazo
-- **Historial de commits** con detalles expandibles
+- **Historial de commits** con detalles expandibles y marcadores de push
 - **10 temas** personalizables (Tokyo Night, Gruvbox Dark, Dracula, Nord, etc.)
+- **Interfaz bilingüe** (English / Español), se cambia en vivo con `/language es`
 - **Auto-actualización** al iniciar vía GitHub API
 
 ### Acciones de Git
@@ -298,7 +368,7 @@ Inspirada en herramientas como `lazygit` o `gitui`, pero enfocada en ser **simpl
 - Crear y cambiar entre ramas
 - Stash y stash pop
 - Configurar remote
-- Eliminar el repositorio (con doble confirmación)
+- Eliminar el `.git` del repositorio — siempre detrás de un modal de confirmación
 - Copiar diff al portapapeles
 
 ### Modos de uso
@@ -410,6 +480,7 @@ tail -f /tmp/git-hero-debug.log
 | `n` | Crear nueva rama |
 | `o` | Configurar remote |
 | `t` | Cambiar tema |
+| `g` | Resumen de repositorios (`/repos`) |
 | `y` | Copiar diff al portapapeles |
 
 ### Otros
@@ -461,7 +532,8 @@ gith/
         │   ├── mod.rs          # AppState, GitFile, GitCommit
         │   ├── command.rs      # Parser y dispatch de comandos
         │   ├── commands.rs     # Ejecución de comandos
-        │   ├── icons.rs        # Tablas de iconos Nerd Font / ASCII
+        │   ├── icons.rs        # Tablas de iconos Nerd Font / ASCII (phf)
+        │   ├── repos.rs        # Escaneo multi-repo (Resumen de Repositorios)
         │   └── suggestions.rs  # Autocompletado de comandos
         ├── rendering/
         │   ├── mod.rs          # draw_ui(), header, footer

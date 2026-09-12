@@ -5,6 +5,56 @@ All notable changes to Git Hero are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-09-12
+
+### Added
+
+- **Repository Overview (`/repos`, key `g`)**: the repository-manager core.
+  Scans sibling directories for Git repos and shows branch, ahead/behind,
+  dirty-file count and last-commit age per repo, sorted by recent activity.
+  Header counts how many repos have uncommitted changes. Enter jumps into a
+  repo (reuses `/cd`), `g` rescans. Cost is two `git` processes per repo,
+  only while the panel is opened — never per frame.
+- **Ignored smoke test** `repos::scan_finds_sibling_repos_sorted_by_activity`
+  (`cargo test -- --ignored`) proves the scan end-to-end with real `git init`.
+- Status-bar version badge now uses `version::full()`: debug and dirty-tree
+  builds are honestly marked (`v0.4.0-dev (hash)*`) instead of shipping-looking.
+
+### Changed
+
+- **Exactly two `git` invocations per refresh** (was three, originally six):
+  `status --branch --porcelain=v2` now doubles as the "is this a repo?" probe
+  via `GitError::NotARepository`; the separate `rev-parse` call is gone.
+- **i18n is compile-time `phf` static maps** (was `OnceLock<HashMap>`): zero
+  construction cost, and `translate()` stays zero-allocation for known keys.
+- **CLI/TUI i18n unified**: `cli.rs` no longer contains any `if lang == "es"`
+  pair — every user-facing string in both modes resolves through the same
+  dictionary. TUI literals (theme/remove/cancel/status messages, footer,
+  input placeholder, modal hints) migrated to i18n keys as well.
+- `/repos` documented in `/help`, `/docs` and the shortcut tables.
+
+### Fixed
+
+- **Panic on non-ASCII commit subjects**: the commits panel truncated subjects
+  with byte-slicing (`&subj[..n]`); any accent/emoji/CJK in a subject could
+  crash the TUI. Truncation is now character-based (`truncate_subject`, unit
+  tested). Same class of bug fixed in the fallback diff renderer.
+- Console message drain in the event loop: `terminal.size()` was queried and
+  the whole console output re-split **per message** (O(n²) on long output,
+  and a `?` that could kill the TUI). Now once per capped batch (64 msgs).
+- `cargo clippy --all-targets -- -D warnings` is clean under Rust 1.98
+  (new lints fixed: `chunks_exact_to_as_chunks`, `collapsible_if`,
+  `collapsible_match`, `needless_return`, dead code in `version.rs`).
+- Whole tree formatted with `cargo fmt` (CI fmt gate was failing).
+
+### Security
+
+- Verified `/remove-repo` behavior against the refactor plan §1.3.1: the
+  destructive delete is reachable **only** through the `show_confirm_remove`
+  modal (y/N), and both `/help` and `/docs` say "asks confirmation". Locked
+  in with regression tests (`modals::tests`), including a static check that
+  `cmd_remove_repo` never calls `git_remove_repo` directly.
+
 ## [0.2.1] — 2025-07-23
 
 ### Fixed
