@@ -71,16 +71,21 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
             last_check = Instant::now();
         }
 
-        // Poll background thread messages
-        while let Ok(msg) = rx.try_recv() {
+        // Poll background thread messages. The drain is capped (64 msgs per
+        // frame) so a chatty producer can never starve input handling, and
+        // the "follow tail" scroll is computed once per batch instead of
+        // once per message (the old code also re-split the *entire*
+        // accumulated console per message — O(n²) over a long command's
+        // output — and propagated `terminal.size()?`, which could kill the
+        // TUI with a raw error mid-stream).
+        let mut got_output = false;
+        let mut drained = 0usize;
+        while drained < 64 && let Ok(msg) = rx.try_recv() {
+            drained += 1;
             match msg {
                 state::TuiMessage::ConsoleOutput(out) => {
                     state.console_output.push_str(&out);
-                    // Scroll console to end
-                    let all_lines: Vec<&str> = state.console_output.split('\n').collect();
-                    let ch = (terminal.size()?.height * 35 / 100).clamp(6, 20);
-                    let visible_h = ch.saturating_sub(2) as usize;
-                    state.console_scroll = all_lines.len().saturating_sub(visible_h);
+                    got_output = true;
                 }
                 state::TuiMessage::UpdateAvailable(_version) => {
                     // Version check completed. Since we already called
@@ -102,6 +107,19 @@ pub fn run_tui(debug: bool) -> Result<(), Box<dyn std::error::Error>> {
                     }
                     state.refresh_git_status();
                 }
+            }
+        }
+
+        if got_output {
+            // Follow the console tail: size is queried once per drained
+            // batch (was once per message) and a size error degrades to
+            // "keep current scroll" instead of killing the event loop.
+            // `draw_console` re-clamps the value every render anyway.
+            if let Ok(size) = terminal.size() {
+                let ch = (size.height * 35 / 100).clamp(6, 20);
+                let visible_h = ch.saturating_sub(2) as usize;
+                let total = state.console_output.split('\n').count();
+                state.console_scroll = total.saturating_sub(visible_h);
             }
         }
 

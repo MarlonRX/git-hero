@@ -438,9 +438,7 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         let items: Vec<ListItem> = visible.iter().enumerate().map(|(i, c)| {
             let actual_idx = start + i;
             let pre = if actual_idx == s.selected_commit_idx && s.focus_pane == "commits" { "\u{25B6} " } else { "  " };
-            let mut subj = c.subject.clone();
-            let sw = right.width.saturating_sub(36) as usize;
-            if subj.len() > sw.max(5) { subj = format!("{}...", &subj[..sw.max(5) - 3]); }
+            let subj = truncate_subject(&c.subject, right.width.saturating_sub(36) as usize);
 
             let push_icon = if c.pushed { "\u{2713}" } else { "\u{21C8}" };
             let push_style = if c.pushed {
@@ -475,6 +473,22 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         }).collect();
         f.render_widget(List::new(items).style(Style::default().bg(s.theme.background)), commits_inner);
     }
+}
+
+/// Truncate `subject` to at most `max` characters, replacing the tail with
+/// an ellipsis when shortened. Character-boundary safe: the previous
+/// implementation byte-sliced (`&subj[..n]`), which panicked the whole TUI
+/// on any commit subject containing multi-byte UTF-8 (accents, emoji,
+/// CJK) — a routine occurrence for a repo manager.
+fn truncate_subject(subject: &str, max: usize) -> String {
+    const MIN_BUDGET: usize = 5;
+    let budget = max.max(MIN_BUDGET);
+    if subject.chars().count() <= budget {
+        return subject.to_string();
+    }
+    let mut out: String = subject.chars().take(budget - 3).collect();
+    out.push_str("...");
+    out
 }
 
 fn draw_compact(f: &mut Frame, s: &mut AppState, body: Rect, header_h: u16) {
@@ -599,4 +613,36 @@ pub fn draw_console(f: &mut Frame, area: Rect, s: &mut AppState) {
         .collect();
 
     f.render_widget(Paragraph::new(styled), inner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_subject_keeps_short_text_intact() {
+        assert_eq!(truncate_subject("init", 50), "init");
+        assert_eq!(truncate_subject("exactly5", 8), "exactly5");
+    }
+
+    #[test]
+    fn truncate_subject_ascii_long_text_gets_ellipsis() {
+        let s = truncate_subject(&"x".repeat(40), 10);
+        assert_eq!(s, "xxxxxxx...");
+    }
+
+    #[test]
+    fn truncate_subject_multibyte_does_not_panic() {
+        // Regression: byte-slicing panicked on subjects like "añadir ✨ función".
+        let s = truncate_subject("añadir ✨ función con tildes", 10);
+        assert_eq!(s.chars().count(), 10);
+        assert!(s.ends_with("..."));
+    }
+
+    #[test]
+    fn truncate_subject_respects_min_budget() {
+        // max < 5 clamps to 5, so "ab..." is always representable.
+        let s = truncate_subject("abcdefg", 1);
+        assert_eq!(s, "ab...");
+    }
 }

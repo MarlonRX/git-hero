@@ -189,9 +189,15 @@ pub fn render_diff_lines(diff: &str, theme: &Theme) -> Vec<Line<'static>> {
         .take(200)
         .map(|line| {
             if line.starts_with("diff --git") || line.starts_with("index ") || line.starts_with("commit ") {
-                let truncated = if line.len() > 120 { &line[..120] } else { line };
+                // chars-based truncation: byte slicing at a fixed 120 could
+                // split a multi-byte UTF-8 sequence and panic.
+                let truncated: String = if line.chars().count() > 120 {
+                    line.chars().take(120).collect()
+                } else {
+                    line.to_string()
+                };
                 Line::from(Span::styled(
-                    truncated.to_string(),
+                    truncated,
                     Style::default().fg(theme.accent).bg(theme.background).add_modifier(Modifier::BOLD)
                 ))
             } else if line.starts_with("@@") {
