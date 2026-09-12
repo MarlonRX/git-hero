@@ -122,6 +122,8 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "repo_overview_summary" => "{} of {} repos have uncommitted changes",
     "repo_overview_empty" => "No Git repositories found near this directory.",
     "repos_no_match" => "No repository matches the filter.",
+    "repos_here" => " here",
+    "no_repo_browser_hint" => "Esc = use these options | click a repo to enter it",
 };
 
 /// Spanish dictionary (built at compile time).
@@ -230,6 +232,8 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "repo_overview_summary" => "{} de {} repos tienen cambios sin commitear",
     "repo_overview_empty" => "No se encontraron repositorios Git cerca de este directorio.",
     "repos_no_match" => "Ningún repositorio coincide con el filtro.",
+    "repos_here" => " actual",
+    "no_repo_browser_hint" => "Esc = usar estas opciones | click en un repo para entrar",
 };
 
 /// Look up a translation for `key` in the given language.

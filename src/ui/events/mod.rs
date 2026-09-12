@@ -84,8 +84,9 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
     }
 
     // ── Repo browser (sidebar dropdown; not a modal — but it owns
-    // keystrokes while open so typing becomes the filter) ─────────
-    if s.show_repo_overview {
+    // keystrokes while open so typing becomes the filter). The init
+    // wizard still preempts it when active. ────────────────────────
+    if s.show_repo_overview && !s.init_wizard_active {
         handle_repo_overview_key(key, s);
         return true;
     }
@@ -187,7 +188,7 @@ pub fn handle_mouse_click(
     // Repo browser (sidebar dropdown): clicking a row opens that repo;
     // clicks in its chrome are swallowed. Hit-testing reuses the exact
     // geometry helpers draw_dashboard paints with, so they cannot drift.
-    if s.show_repo_overview {
+    if s.show_repo_overview && !s.init_wizard_active {
         use crate::ui::rendering::body_area;
         use crate::ui::rendering::panels::{browser_area, browser_rows_rect, browser_scroll};
         let body = body_area(inner);

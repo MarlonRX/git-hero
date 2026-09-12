@@ -144,8 +144,13 @@ pub fn draw_no_repo_panel(f: &mut Frame, s: &mut AppState, body: Rect) {
         },
     );
 
+    let options_hint = if s.show_repo_overview {
+        translate(&s.language, "no_repo_browser_hint").into_owned()
+    } else {
+        "Arrow keys / Enter / Click to select".to_string()
+    };
     f.render_widget(
-        Paragraph::new("Arrow keys / Enter / Click to select")
+        Paragraph::new(options_hint)
             .alignment(Alignment::Center)
             .style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
         Rect {
@@ -916,6 +921,7 @@ pub fn draw_repo_browser(f: &mut Frame, area: Rect, s: &AppState) {
 /// (+ branch/sync when there's room), dirty chip, activity age.
 fn repo_browser_row(s: &AppState, view_pos: usize, e: &RepoEntry, width: usize) -> Line<'static> {
     let selected = view_pos == s.repo_cursor;
+    let here = is_within(&e.path, &s.cwd);
     let base = if selected {
         Style::default()
             .bg(s.theme.highlight)
@@ -938,12 +944,37 @@ fn repo_browser_row(s: &AppState, view_pos: usize, e: &RepoEntry, width: usize) 
     } else {
         ("  \u{2713}  ".to_string(), base.fg(s.theme.success))
     };
-    let name_w = if wide { 18 } else { 22 };
+    let name_w = if wide { 18 } else { 24 };
+
+    // Name chip: bold label on a surface-colored background — the folder /
+    // repo name is the primary thing a row communicates. The repository
+    // the user is currently inside is additionally tagged `● here`.
+    let name_chip = Style::default()
+        .fg(if selected {
+            s.theme.on_highlight
+        } else if here {
+            s.theme.success
+        } else {
+            s.theme.foreground
+        })
+        .bg(if selected {
+            s.theme.highlight
+        } else {
+            s.theme.surface
+        })
+        .add_modifier(Modifier::BOLD);
 
     let mut spans = vec![
         Span::styled(pre, base),
-        Span::styled(clip(&e.rel, name_w), base.add_modifier(Modifier::BOLD)),
+        Span::styled(clip(&e.rel, name_w), name_chip),
     ];
+    if here {
+        let label = format!(" \u{25CF}{}", translate(&s.language, "repos_here"));
+        spans.push(Span::styled(
+            label,
+            base.fg(s.theme.success).add_modifier(Modifier::BOLD),
+        ));
+    }
     if wide {
         let sync = format!("\u{2191}{}\u{2193}{}", e.ahead, e.behind);
         let sync_style = if selected {
@@ -960,15 +991,33 @@ fn repo_browser_row(s: &AppState, view_pos: usize, e: &RepoEntry, width: usize) 
             base.fg(s.theme.primary),
         ));
         spans.push(Span::styled(format!(" {sync:<5}"), sync_style));
-    } else {
+    } else if !here {
         spans.push(Span::raw("  "));
     }
-    spans.push(Span::styled(chip, chip_style));
-    spans.push(Span::styled(
-        e.age.clone(),
-        base.fg(s.theme.dimmed).add_modifier(Modifier::BOLD),
-    ));
+    if wide || !here {
+        spans.push(Span::styled(chip, chip_style));
+        spans.push(Span::styled(
+            e.age.clone(),
+            base.fg(s.theme.dimmed).add_modifier(Modifier::BOLD),
+        ));
+    }
     Line::from(spans)
+}
+
+/// True when `dir` is `repo` itself or lives inside it. Compares raw bytes
+/// (case-insensitive for Windows paths) and requires a separator boundary,
+/// so `/a/bc` never counts as inside `/a/b` and a multi-byte char can never
+/// be split.
+pub fn is_within(repo: &str, dir: &str) -> bool {
+    let r = repo.trim_end_matches(['/', '\\']);
+    let (rb, db) = (r.as_bytes(), dir.as_bytes());
+    if db.len() < rb.len() || !db[..rb.len()].eq_ignore_ascii_case(rb) {
+        return false;
+    }
+    match db.get(rb.len()) {
+        None => true,
+        Some(&c) => c == b'/' || c == b'\\',
+    }
 }
 
 /// Left-align and clip to `max` chars (char-boundary safe, `…` marker).
@@ -1241,5 +1290,26 @@ mod tests {
         assert_eq!(area.y, 0);
         assert_eq!(area.height, 40);
         assert!(area.width >= 38 && area.width <= 58);
+    }
+
+    #[test]
+    fn is_within_matches_same_dir_and_children() {
+        assert!(is_within("/a/b", "/a/b"));
+        assert!(is_within("/a/b/", "/a/b"));
+        assert!(is_within("/a/b", "/a/b/src"));
+        assert!(is_within("/a/b", "/a/b/src/deep"));
+        // Windows-style separators + case-insensitivity.
+        assert!(is_within("C:\\Users\\me\\Proj", "c:\\users\\me\\proj\\src"));
+    }
+
+    #[test]
+    fn is_within_rejects_lookalikes_and_parents() {
+        assert!(!is_within("/a/b", "/a/bc")); // sibling, not child
+        assert!(!is_within("/a/b", "/a")); // parent
+        assert!(!is_within("/a/b", "/x/a/b")); // unrelated prefix
+        assert!(!is_within("C:\\a", "C:\\ab"));
+        // Multi-byte boundary: must not panic nor match mid-codepoint.
+        assert!(!is_within("/a/b", "/a/bé"));
+        assert!(is_within("/café", "/café/src"));
     }
 }

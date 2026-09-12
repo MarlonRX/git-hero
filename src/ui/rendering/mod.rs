@@ -243,16 +243,25 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
         },
     );
 
-    // Right side: directory path with icon
+    // Right side: where the user is — folder/repo NAME as a bold chip on a
+    // surface background (unmistakable at a glance), then the full path
+    // dimmed behind it.
+    let base_name = std::path::Path::new(s.cwd.as_str())
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| s.cwd.clone());
     let dir_spans = vec![
         ratatui::text::Span::styled(
-            format!("{} ", s.get_icon_str("dir")),
-            Style::default().fg(s.theme.accent),
+            format!(" {} {} ", s.get_icon_str("dir"), base_name),
+            Style::default()
+                .fg(s.theme.primary)
+                .bg(s.theme.surface)
+                .add_modifier(Modifier::BOLD),
         ),
         ratatui::text::Span::styled(
-            dir,
+            format!(" {dir}"),
             Style::default()
-                .fg(s.theme.foreground)
+                .fg(s.theme.dimmed)
                 .add_modifier(Modifier::ITALIC),
         ),
     ];

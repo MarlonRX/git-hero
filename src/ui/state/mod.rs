@@ -378,6 +378,12 @@ impl AppState {
                 self.commits.clear();
                 self.active_diff.clear();
                 self.status_message = translate(&self.language, "warn_not_repo").into_owned();
+                // Repository-manager default: outside a repo the browser
+                // IS the landing screen — pick a found repo, or use the
+                // init / /cd options offered next to it (Esc first).
+                if !self.show_repo_overview {
+                    self.execute_command("/repos");
+                }
             }
             Err(e) => {
                 // We are inside a repo (git answered) but status failed

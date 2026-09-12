@@ -22,21 +22,26 @@ Everything in Git Hero serves the repository-manager story:
 | 4 | **Push** | `p` / `/push` | explicit y/N modal |
 | 5 | **Switch branch** | `/switch <name>` / `/branch` | instant, errors reported |
 
-Plus the manager glue: `/repos` (or `g`) opens a **Repository Overview** — a
-scan of all sibling repositories sorted by last activity, with a dirty-file
-count per repo and a global rescan key; press Enter to jump into any repo.
+Plus the manager glue: `g` or `/repos` opens a **Repository Browser** — a
+dropdown in the sidebar (where the shortcuts block used to live) that
+**recursively** scans your projects folder and lists every repo with its
+branch, `↑ahead/↓behind`, dirty-file count and last-activity age. Just **type
+to filter** (no git calls while typing), `Enter` or click to jump into a repo,
+`Ctrl+R` to re-scan, `Esc` to close.
 
 ```text
-┌┤  Repository Overview  ────────────────────────────────────────────────┐
-│  2 of 4 repos have uncommitted changes   ~/projects                    │
-│                                                                        │
-│   ▶ api-server          main          ↑2 ↓0  4 ✱       12m             │
-│     web-client          feat/dark     ↑0 ↓3  1 ✱        2h             │
-│     infra               main          ↑0 ↓0   ✓         3d             │
-│     dotfiles            master        ↑1 ↓0   ✓         2w             │
-│                                                                        │
-│     [↑/↓] Select   [Enter] Open   [g] Rescan   [Esc] Close             │
-└────────────────────────────────────────────────────────────────────────┘
+┌ FILES (3) ─────────┬────────────────────────────────────────┐
+│  ✓ src/i18n.rs     │  DIFF                                  │
+│  ▶ src/cli.rs      │  ...                                   │
+├────────────────────┤                                        │
+│ ◆ Repositories      │                                        │
+│  2 of 4 dirty      │                                        │
+│  ⌕ ser█  2/4       │                                        │
+│  ▶ work/api-serv…  │                                        │
+│    web/api-gw      │                                        │
+│  type=filter Enter │                                        │
+│  =open Ctrl+R=scan │                                        │
+└────────────────────┴────────────────────────────────────────┘
 ```
 
 **What Git Hero is *not*:** an interactive-rebase tool, a blame viewer or a
@@ -57,7 +62,7 @@ non-interactive `-cli` mode for scripting the same commit→pull→push flow.
 ## ✨ Features
 
 ### Repository management (the niche)
-- **Repository Overview** (`g` or `/repos`): every sibling repo on one screen — branch, ahead/behind, dirty count, last-activity age — sorted by recency, jump in with Enter, `g` rescans
+- **Repository Browser** (`g` or `/repos`): type-ahead dropdown in the sidebar — recursively scans your projects folder (depth-bounded, vendor dirs skipped) and lists branch, ahead/behind, dirty count and last-activity age per repo, sorted by recency. Typing filters with zero git calls; Enter or click jumps in; `Ctrl+R` re-scans
 - **Status at a glance**: header with branch, `↑ahead`/`↓behind` badges and working directory
 - **Auto-refresh** of the current repo every 2 seconds (zero git calls when nothing changed)
 
@@ -189,7 +194,7 @@ tail -f /tmp/git-hero-debug.log
 | `n` | Create new branch |
 | `o` | Configure remote |
 | `t` | Change theme |
-| `g` | Repository overview (`/repos`) |
+| `g` | Repository browser (type to filter, Enter to jump) |
 | `y` | Copy diff to clipboard |
 
 ### Other
@@ -334,10 +339,12 @@ tarea y seguir. Las cinco acciones del día a día:
 | 4 | **Push** | `p` / `/push` | modal de confirmación y/N explícito |
 | 5 | **Cambiar de rama** | `/switch <nombre>` / `/branch` | instantáneo, errores reportados |
 
-Y la cola de gestor: `/repos` (o tecla `g`) abre el **Resumen de Repositorios** —
-escaneo de todos los repos hermanos ordenado por última actividad, con contador
-de archivos sin commitear por repo y tecla de reescaneo global; Enter salta al
-repo elegido.
+Y la cola de gestor: `g` o `/repos` abre el **Navegador de Repositorios** —
+un desplegable en la barra lateral (donde antes vivían los shortcuts) que
+recorre **recursivamente** tu carpeta de proyectos y lista cada repo con su
+rama, `↑adelante/↓detrás`, cantidad de archivos sucios y antigüedad del último
+commit. **Escribí para filtrar** (sin llamadas a git mientras tipeás), Enter o
+click para entrar, `Ctrl+R` reescanea, `Esc` cierra.
 
 **Lo que Git Hero *no* es:** una herramienta de rebase interactivo, visor de
 blame ni IDE de submódulos. Para cirugía profunda de un repo usá `lazygit`/`gitui`
@@ -348,7 +355,7 @@ blame ni IDE de submódulos. Para cirugía profunda de un repo usá `lazygit`/`g
 ## ✨ Características
 
 ### Gestión de repositorios (el nicho)
-- **Resumen de Repositorios** (`g` o `/repos`): todos los repos hermanos en una pantalla — rama, adelante/detrás, archivos sucios, antigüedad — ordenados por actividad, Enter para entrar, `g` reescanea
+- **Navegador de Repositorios** (`g` o `/repos`): desplegable con filtrado al teclear en la barra lateral — escanea recursivamente tu carpeta de proyectos (profundidad limitada, salta carpetas de vendor/build) y lista rama, adelante/detrás, archivos sucios y antigüedad por repo, ordenados por actividad. Escribir filtra sin gastar llamadas a git; Enter o click entra al repo; `Ctrl+R` reescanea
 - **Estado de un vistazo**: rama, badges `↑adelante`/`↓detrás` y directorio actual
 - **Auto-refresco** del repo actual cada 2 segundos (cero llamadas a git si nada cambió)
 
@@ -480,7 +487,7 @@ tail -f /tmp/git-hero-debug.log
 | `n` | Crear nueva rama |
 | `o` | Configurar remote |
 | `t` | Cambiar tema |
-| `g` | Resumen de repositorios (`/repos`) |
+| `g` | Navegador de repos (escribir filtra, Enter entra) |
 | `y` | Copiar diff al portapapeles |
 
 ### Otros

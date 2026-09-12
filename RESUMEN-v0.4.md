@@ -19,16 +19,16 @@ contra el baseline real.
 
 | Métrica | Plan decía "antes" | Real v0.3.0 (baseline) | v0.4.0 (ahora) | Objetivo del plan |
 |---|---|---|---|---|
-| `cargo test` | 2 | **85** | **112 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
+| `cargo test` | 2 | **85** | **120 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
 | Invocaciones git por `refresh_git_status` | 6 | 3 (rev-parse+status+log) | **2** (status doble-función + log) | 2 ✅ |
 | Allocaciones en `translate()`/keystroke | ~40 µs + 2 HashMaps | 0 en hit (OnceLock) | **0, tablas `phf` estáticas compile-time** | ✅ |
 | `if lang == "es"` en `cli.rs` | 9 | 9 (keys existían sin usar) | **0** — diccionario único CLI+TUI | ✅ |
 | Strings EN/ES duros en TUI (footer, placeholder, theme/remove/cancel) | varios | varios | **0** en el path tocado; keys i18n nuevos | ✅ |
 | Panics latentes de render hot-path | — | 2 (byte-slice de subjects y diff con UTF-8) | **0** (`truncate_subject` + truncado por chars, 4 tests) | ✅ |
 | Drenado de consola | `terminal.size()?` + re-split O(n²) por mensaje | igual | **1 query de size por batch, drain acotado a 64, sin `?` letal** | ✅ |
-| `commands.rs` LOC | 353 (if-else) | 501 (ya dispatch-table) | **487** | ≤150 ❌ (el número del plan no aplica al formato actual; ver nota) |
-| `draw_dashboard` LOC | 420 | 307 | **467** ⚠ inflación de `cargo fmt` (misma lógica −1 línea, +formato canonical); objetivo ≤200 es Fase 4 → DEFERRED | ❌ (omitida a propósito) |
-| LOC total `src/` | ~6 000 | 6 937 | **8 898** (+/repos 350, +tests, +fmt) | n/a |
+| `commands.rs` LOC | 353 (if-else) | 501 (ya dispatch-table) | **489** | ≤150 ❌ (el número del plan no aplica al formato actual; ver nota) |
+| `draw_dashboard` LOC | 420 | 307 | **478** ⚠ inflación de `cargo fmt` (misma lógica −1 línea, +formato canonical); objetivo ≤200 es Fase 4 → DEFERRED | ❌ (omitida a propósito) |
+| LOC total `src/` | ~6 000 | 6 937 | **9 171** (+/repos browser ~260 de runtime, +tests, +fmt) | n/a |
 | `cargo clippy --all-targets -- -D warnings` | ❌ | ❌ (9 warns en Rust 1.98) | **✅ exit 0** | ✅ |
 | `cargo fmt --check` | ❌ | ❌ | **✅** | (gate CI extra) |
 | `cargo build --release` | — | — | **✅ 19 s, sin warnings** | ✅ |
@@ -46,21 +46,33 @@ contra el baseline real.
    confirmation"; README también. Quedó **blindado con 3 tests** (docs nunca
    dice "no confirm"; HELP lo exige; chequeo estático de que `cmd_remove_repo`
    no llama a `git_remove_repo`, único camino es el confirm-key handler).
-3. **Fase 5 mínima** ✅ 112 tests en 16 módulos (git 20, command 33, i18n 8,
-   repos 9, theme 5, config 2, panels 4, icons 4, keyboard 2, cli 2, modals 3,
-   suggestions 7, version 6, git_error 6, log 2, commands 1), clippy limpio,
+3. **Fase 5 mínima** ✅ 120 tests en verde (+1 smoke ignorado) en 16 módulos
+   (command 34, git 20, panels 10, repos 10+1, i18n 8, suggestions 7, version 6,
+   git_error 6, theme 5, icons 4, modals 3, keyboard 2, cli 2, config 2, log 2,
+   commands 1), clippy limpio,
    release OK, CI (`.github/workflows/ci.yml`) ya corría check/clippy/fmt/test.
 4. **Pulido gestor de repos** ✅ era inexistente (el "dashboard multi-repo" del
-   enunciado no estaba en el código: el TUI era mono-repo). Se construyó lo
-   mínimo del nicho sin pasar el techo de ~300 líneas de runtime:
-   `/repos` o tecla `g` → **Repository Overview**: una fila por repo hermano
-   (rama, ↑ahead/↓behind, **contador de archivos sucios**, edad del último
-   commit), **ordenado por última actividad**, header "**n de m repos tienen
-   cambios sin commitear**", `g` = **refresco global**, Enter = saltar al repo
-   (vía `/cd`). Costo: 2 procesos git por repo, solo al abrir/reescanear.
-   Verificado con smoke test real (`-- --ignored`: `git init` de 2 repos +
-   asserts de orden/dirty/skip-no-repos). Fix anejo: paths con espacios
-   truncados por el parser v2 (`splitn`, validado contra git 2.55 real).
+   enunciado no estaba en el código: el TUI era mono-repo). Iteración 1: overlay
+   modal `/repos`. **Iteración 2 (feedback en vivo)**: el modal "no era claro de
+   usar" → re-diseñado como **browser tipo desplegable en el sector de la barra
+   lateral donde vivían los shortcuts**, con:
+   - **Escaneo recursivo** (profundidad ≤4, tope 500 dirs visitados / 60 repos
+     probed, salta ocultos y `node_modules`/`target`/`vendor`/…; no desciende
+     dentro de un repo ya encontrado).
+   - **Filtrado al teclear** (typeahead puro sobre datos ya scaneados: escribir
+     cuesta 0 llamadas a git), con contador de coincidencias `2/40`.
+   - Filas: `ruta/relativa · rama · ↑a↓b · n✱ · antigüedad`, orden por actividad,
+     header "**X de Y repos con cambios sin commitear**".
+   - **Enter o CLICK** entra al repo (vía `/cd`); `Ctrl+R` reescanea; `Esc`
+     cierra. Concwd sin repo el browser ocupa la columna izquierda completa y
+     el panel de init queda a la derecha (seguir gestionando sin repo abierto).
+   - Click-to-row sin drift de geometría: `sidebar_split`/`browser_area`/
+     `browser_rows_rect` son helpers puros compartidos por draw y hit-testing,
+     con tests unitarios.
+   Costo verificado con smoke real ignorado (`-- --ignored`: repo anidado
+   encontrado, decoy en `node_modules` descartado, orden/dirty asserts).
+   Fix anejo: paths con espacios truncados por el parser v2 (`splitn`,
+   validado contra git 2.55 real).
 5. **README** ✅ primera sección reescrita (EN y ES): "gestor de repositorios,
    no cliente git", tabla honesta de las 5 acciones con su nivel de seguridad,
    mock de texto del panel `/repos`, y un "lo que Git Hero NO es" (rebase
@@ -79,7 +91,9 @@ feat(repos): /repos multi-repo overview - dirty count, ahead/behind, last-activi
 test(repos): ignored smoke test proves scan on real git (dirty, ordering, non-repo skip)
 style: cargo fmt across the tree (green CI fmt gate, repo had drifted)
 fix(git): porcelain v2 parser keeps paths containing spaces (regression, verified vs real git)
-chore(release): v0.4.0 - repo-manager positioning, CHANGELOG, RESUMEN
+chore(release): v0.4.0 - repo-manager positioning, CHANGELOG, RESUMEN with real metrics
+feat(repos): /repos becomes sidebar type-ahead browser - recursive scan, filter without git, click to open
+docs: repository browser wording across README/CHANGELOG/RESUMEN (feedback iteration)
 ```
 
 *(Locales, sin push, sin tags, config JSON intacto — `Config` no ganó campos
@@ -91,9 +105,12 @@ nuevos: `repo_dirty_count` vive en `AppState`, no en disco.)*
   números del plan contra el código pre-v0.3; medirlos contra el árbol actual
   no es comparable (dispatch-table ya existía; fmt canónico infla LOC). Queda
   anotado arriba y el split real de `draw_dashboard` es Fase 4 → hermano.
-- `/repos` lista hijos del cwd si NO hay repo, y hermanos si el cwd ES repo.
-  Sin config de "projects folder" (el enunciado prohibió tocar el formato de
-  config; una key opcional podría agregarse en el futuro sin romper nada).
-- Click para seleccionar fila en `/repos`: no hecho (keyboard completo).
+- `/repos` recorre recursivamente desde el padre del repo actual (o el cwd si
+  no hay repo). Sin config de "projects folder" (el enunciado prohibió tocar
+  el formato de config; una key opcional con `#[serde(default)]` podría
+  agregarse en el futuro sin romper nada).
+- Las zonas de click del FILES panel (`mouse_dashboard`) siguen asumiendo el
+  layout viejo del sidebar (STATUS/SHORTCUTS) cuando el browser está cerrado:
+  benigno, registrado en DEFERRED; el browser sí tiene hit-testing exacto.
 - Zona de clicks obsoleta en `mouse_dashboard` (sidebar STATUS/SHORTCUTS que ya
   no existe): benigna, registrada en DEFERRED.

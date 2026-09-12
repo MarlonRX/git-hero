@@ -108,6 +108,8 @@ impl AppState {
         let resolved = expand_path(path);
         match std::env::set_current_dir(resolved.as_ref()) {
             Ok(()) => {
+                // Explicit navigation ends the browsing session.
+                self.show_repo_overview = false;
                 if let Ok(new_cwd) = std::env::current_dir() {
                     self.cwd = new_cwd.to_string_lossy().into_owned();
                     self.selected_file_idx = 0;

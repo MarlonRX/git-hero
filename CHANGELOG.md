@@ -9,14 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Repository Overview (`/repos`, key `g`)**: the repository-manager core.
-  Scans sibling directories for Git repos and shows branch, ahead/behind,
-  dirty-file count and last-commit age per repo, sorted by recent activity.
-  Header counts how many repos have uncommitted changes. Enter jumps into a
-  repo (reuses `/cd`), `g` rescans. Cost is two `git` processes per repo,
-  only while the panel is opened — never per frame.
-- **Ignored smoke test** `repos::scan_finds_sibling_repos_sorted_by_activity`
-  (`cargo test -- --ignored`) proves the scan end-to-end with real `git init`.
+- **Repository Browser (`/repos`, key `g`)**: the repository-manager core.
+  A type-ahead dropdown in the sidebar's lower sector (where the shortcuts
+  block used to live) that **recursively** scans the projects folder —
+  depth-bounded (4 levels), skipping hidden and vendor/build directories
+  (`node_modules`, `target`, `vendor`, …) and pruning at each repo root —
+  and shows branch, ahead/behind, dirty-file count and last-commit age per
+  repo, sorted by recent activity. Typing filters with zero git calls;
+  Enter **or click** jumps into the repo (via `/cd`); `Ctrl+R` re-scans;
+  `Esc` closes. Header line counts how many repos have uncommitted changes.
+  Cost is two `git` processes per repo, only on open/re-scan — never per
+  frame.
+- **Ignored smoke test** `repos::scan_recursively_finds_nested_repos_and_skips_vendor`
+  (`cargo test -- --ignored`) proves the recursive scan end-to-end with real
+  `git init` (nested repo found, `node_modules` decoy skipped, ordering and
+  dirty count asserted).
 - Status-bar version badge now uses `version::full()`: debug and dirty-tree
   builds are honestly marked (`v0.4.0-dev (hash)*`) instead of shipping-looking.
 
