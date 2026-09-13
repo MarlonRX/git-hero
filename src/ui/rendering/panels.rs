@@ -305,7 +305,18 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
         width: sidebar.width,
         height: files_area.height,
     };
-    let files_title = format!(" FILES ({}) ", s.files.len());
+    // When the list doesn't fit, the title doubles as a position readout
+    // so the user knows scrolling is happening ("FILES (12/57)").
+    let files_view_rows = files_area.height.saturating_sub(2) as usize;
+    let files_title = if s.files.len() > files_view_rows {
+        format!(
+            " FILES ({}/{}) ",
+            (s.flat_idx + 1).min(s.files.len()),
+            s.files.len()
+        )
+    } else {
+        format!(" FILES ({}) ", s.files.len())
+    };
     let border_color = if s.focus_pane == "files" {
         s.theme.primary
     } else {
@@ -462,8 +473,17 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             items
         };
 
+        // Scroll window: the list was previously rendered in full, so any
+        // selection past the bottom edge was simply clipped and invisible.
+        // Rows are now windowed around the selected entry (same logic as
+        // the repo browser), keeping the cursor always on screen.
+        let rows_h = files_inner.height as usize;
+        let sel_row = s.flat_idx + if indicator_text.is_empty() { 0 } else { 1 };
+        let start = browser_scroll(all_items.len(), rows_h, sel_row);
+
         f.render_widget(
-            List::new(all_items).style(Style::default().bg(s.theme.background)),
+            List::new(all_items.into_iter().skip(start).take(rows_h))
+                .style(Style::default().bg(s.theme.background)),
             files_inner,
         );
     }
@@ -681,10 +701,15 @@ pub fn draw_dashboard(f: &mut Frame, s: &mut AppState, body: Rect) {
             commits_inner,
         );
     } else {
-        // Phase 4.11: O(n) slice + O(1) per-item index lookup. The previous
-        // version did `s.commits.iter().position(|c| c.hash == c.hash)` per
-        // visible commit, which is O(n²) for repos with many commits.
-        let start = s.commit_scroll_offset.min(s.commits.len());
+        // Phase 4.11 + follow-selection windowing: the visible slice is
+        // centered on `selected_commit_idx` (same `browser_scroll` helper
+        // as files/browser), so the cursor can never scroll off-screen the
+        // way it could with the old manual `commit_scroll_offset`.
+        let start = browser_scroll(
+            s.commits.len(),
+            commits_inner.height as usize,
+            s.selected_commit_idx,
+        );
         let end = (start + commits_inner.height as usize).min(s.commits.len());
         let visible: &[GitCommit] = &s.commits[start..end];
 

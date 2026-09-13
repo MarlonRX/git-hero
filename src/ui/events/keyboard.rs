@@ -293,6 +293,12 @@ pub fn handle_no_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         }
         KeyCode::Char('t') | KeyCode::Char('T') => s.execute_command("/themes"),
         KeyCode::Char('g') | KeyCode::Char('G') => s.execute_command("/repos"),
+        KeyCode::Char('/') => {
+            s.show_input = true;
+            s.input_value = "/".into();
+            s.input_cursor_pos = 1;
+            s.update_suggestions();
+        }
         KeyCode::Char('q') | KeyCode::Char('Q') => return false,
         _ => {}
     }
@@ -322,7 +328,6 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx =
                     (s.selected_commit_idx + s.commits.len() - 1) % s.commits.len();
-                s.commit_scroll_offset = 0;
                 s.commit_detail_scroll = 0;
                 s.update_diff_content();
                 s.diff_scroll_offset = 0;
@@ -341,7 +346,6 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 s.diff_scroll_offset = 0;
             } else if s.focus_pane == "commits" && !s.commits.is_empty() {
                 s.selected_commit_idx = (s.selected_commit_idx + 1) % s.commits.len();
-                s.commit_scroll_offset = 0;
                 s.commit_detail_scroll = 0;
                 s.update_diff_content();
                 s.diff_scroll_offset = 0;
@@ -449,8 +453,11 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
         KeyCode::PageDown => {
             if s.focus_pane == "commits" && s.show_commit_detail {
                 s.commit_detail_scroll += 5;
-            } else if s.focus_pane == "commits" {
-                s.commit_scroll_offset += 5;
+            } else if s.focus_pane == "commits" && !s.commits.is_empty() {
+                // Page jumps move the selection; the panel windows itself.
+                s.selected_commit_idx = (s.selected_commit_idx + 5).min(s.commits.len() - 1);
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else {
                 s.diff_scroll_offset += 5;
             }
@@ -462,12 +469,10 @@ pub fn handle_repo_key(code: KeyCode, s: &mut AppState) -> bool {
                 } else {
                     s.commit_detail_scroll = 0;
                 }
-            } else if s.focus_pane == "commits" {
-                if s.commit_scroll_offset >= 5 {
-                    s.commit_scroll_offset -= 5;
-                } else {
-                    s.commit_scroll_offset = 0;
-                }
+            } else if s.focus_pane == "commits" && !s.commits.is_empty() {
+                s.selected_commit_idx = s.selected_commit_idx.saturating_sub(5);
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             } else if s.diff_scroll_offset >= 5 {
                 s.diff_scroll_offset -= 5;
             } else {
@@ -505,6 +510,15 @@ pub fn handle_repo_overview_key(key: KeyEvent, s: &mut AppState) {
             }
         }
         KeyCode::Enter => s.open_selected_repo(),
+        // `/` always means "command bar", even inside the browser: routing
+        // puts command input above the browser, so letter shortcuts and
+        // filter keystrokes stay blocked while you type a command.
+        KeyCode::Char('/') => {
+            s.show_input = true;
+            s.input_value = "/".into();
+            s.input_cursor_pos = 1;
+            s.update_suggestions();
+        }
         KeyCode::Backspace => {
             s.repo_filter.pop();
             s.apply_repo_filter();

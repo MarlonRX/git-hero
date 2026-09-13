@@ -27,7 +27,10 @@ dropdown in the sidebar (where the shortcuts block used to live) that
 **recursively** scans your projects folder and lists every repo with its
 branch, `↑ahead/↓behind`, dirty-file count and last-activity age. Just **type
 to filter** (no git calls while typing), `Enter` or click to jump into a repo,
-`Ctrl+R` to re-scan, `Esc` to close.
+`Ctrl+R` to re-scan, `Esc` to close. **Open `gith` in a plain folder and this
+browser is what you get first** — pick a repo from the list or use the
+init/`/cd` options beside it. The repository you are currently inside is
+tagged `● here`, and your location is a bold badge in the header.
 
 ```text
 ┌ FILES (3) ─────────┬────────────────────────────────────────┐
@@ -202,8 +205,13 @@ tail -f /tmp/git-hero-debug.log
 |-------|--------|
 | `?` or `h` | Show help |
 | `q` | Quit |
-| `/` | Open command bar |
+| `/` | Open command bar (works from anywhere, incl. the repo browser) |
 | `Ctrl+C` | Quit |
+| `PgUp/PgDn` / wheel | Page through files, commits and the browser |
+
+> The footer always shows a `[key] action` strip for the context you are in
+> (repo, browser, no-repo, typing a command), so the shortcuts are visible
+> without opening `/help`.
 
 ### Mouse
 - **Click** on any panel → switch focus
@@ -344,7 +352,11 @@ un desplegable en la barra lateral (donde antes vivían los shortcuts) que
 recorre **recursivamente** tu carpeta de proyectos y lista cada repo con su
 rama, `↑adelante/↓detrás`, cantidad de archivos sucios y antigüedad del último
 commit. **Escribí para filtrar** (sin llamadas a git mientras tipeás), Enter o
-click para entrar, `Ctrl+R` reescanea, `Esc` cierra.
+click para entrar, `Ctrl+R` reescanea, `Esc` cierra. **Si abrís `gith` en una
+carpeta sin repo, esto es lo primero que vas a ver** — elegí un repo de la
+lista o usá las opciones de init/`/cd` al lado. El repo donde estás ahora
+aparece marcado `● actual` y tu ubicación va en un badge grande y destacado
+en el header.
 
 **Lo que Git Hero *no* es:** una herramienta de rebase interactivo, visor de
 blame ni IDE de submódulos. Para cirugía profunda de un repo usá `lazygit`/`gitui`
@@ -495,8 +507,13 @@ tail -f /tmp/git-hero-debug.log
 |-------|--------|
 | `?` o `h` | Mostrar ayuda |
 | `q` | Salir |
-| `/` | Abrir barra de comandos |
+| `/` | Abrir barra de comandos (funciona desde cualquier lado, incluido el navegador) |
 | `Ctrl+C` | Salir |
+| `PgUp/PgDn` / rueda | Paging de archivos, commits y navegador |
+
+> El footer siempre muestra una tira `[tecla] acción` del contexto actual
+> (repo, navegador, sin repo, escribiendo comando): los atajos están a la
+> vista sin abrir `/help`.
 
 ### Mouse
 - **Click** en cualquier panel → cambia el foco

@@ -19,7 +19,7 @@ contra el baseline real.
 
 | Métrica | Plan decía "antes" | Real v0.3.0 (baseline) | v0.4.0 (ahora) | Objetivo del plan |
 |---|---|---|---|---|
-| `cargo test` | 2 | **85** | **120 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
+| `cargo test` | 2 | **85** | **126 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
 | Invocaciones git por `refresh_git_status` | 6 | 3 (rev-parse+status+log) | **2** (status doble-función + log) | 2 ✅ |
 | Allocaciones en `translate()`/keystroke | ~40 µs + 2 HashMaps | 0 en hit (OnceLock) | **0, tablas `phf` estáticas compile-time** | ✅ |
 | `if lang == "es"` en `cli.rs` | 9 | 9 (keys existían sin usar) | **0** — diccionario único CLI+TUI | ✅ |
@@ -46,10 +46,10 @@ contra el baseline real.
    confirmation"; README también. Quedó **blindado con 3 tests** (docs nunca
    dice "no confirm"; HELP lo exige; chequeo estático de que `cmd_remove_repo`
    no llama a `git_remove_repo`, único camino es el confirm-key handler).
-3. **Fase 5 mínima** ✅ 120 tests en verde (+1 smoke ignorado) en 16 módulos
-   (command 34, git 20, panels 10, repos 10+1, i18n 8, suggestions 7, version 6,
-   git_error 6, theme 5, icons 4, modals 3, keyboard 2, cli 2, config 2, log 2,
-   commands 1), clippy limpio,
+3. **Fase 5 mínima** ✅ 126 tests en verde (+1 smoke ignorado) en 17 módulos
+   (command 33, git 20, panels 12, repos 10+smoke, i18n 8, suggestions 7,
+   rendering 4 (legend), version 6, git_error 6, theme 5, icons 4, modals 3,
+   keyboard 2, cli 2, config 2, log 2, commands 1), clippy limpio,
    release OK, CI (`.github/workflows/ci.yml`) ya corría check/clippy/fmt/test.
 4. **Pulido gestor de repos** ✅ era inexistente (el "dashboard multi-repo" del
    enunciado no estaba en el código: el TUI era mono-repo). Iteración 1: overlay
@@ -73,6 +73,29 @@ contra el baseline real.
    encontrado, decoy en `node_modules` descartado, orden/dirty asserts).
    Fix anejo: paths con espacios truncados por el parser v2 (`splitn`,
    validado contra git 2.55 real).
+   **Iteración 3 (feedback en vivo)**: el browser pasó a ser **la pantalla por
+   defecto cuando el directorio no es repo** (arranque, `/cd` a carpeta suelta
+   o post-`/remove-repo`): lista a la izquierda + opciones init/`/cd` a la
+   derecha, `Esc` devuelve el teclado a esas opciones y el wizard de init
+   mantiene prioridad sobre el browser. Además el nombre de la carpeta/repo
+   actual se ve claro de una vez: **badge bold con fondo** en la status line y
+   **chips de nombre en negrita sobre fondo surface** en cada fila del browser,
+   con marcador **`● here`/`● actual`** en el repo donde está el usuario
+    (`is_within`, comparaciones por bytes sin riesgo de partir UTF-8, testeada).
+   **Iteración 4 (feedback en vivo)**: tres correcciones de manejo.
+   (a) **Scroll real en FILES/COMMITS**: antes la lista se cortaba contra el
+   borde y la selección quedaba invisible; ahora cada panel se ventanea
+   (`browser_scroll`) alrededor de la selección y el título de FILES muestra
+   la posición `FILES (12/57)`; se eliminó `commit_scroll_offset` manual y la
+   rueda/PgUp-PgDn ahora **mueve la selección** (la vista sigue). La rueda
+   sobre el browser mueve su cursor. (b) **Bloqueo de atajos al tipear**: el
+   input de comandos se enruta **antes** que el browser, y `/` abre la barra
+   desde cualquier lado (repo, sin-repo, dentro del browser); así ningún
+   comando de letra salta mientras escribís un comando. (c) **Tira de teclas
+   siempre visible**: el footer ganó una 3ª fila con chips `[tecla] acción`
+   por contexto (repo/browser/sin-repo/escribiendo), con degradado por ancho
+   (`…`). Tests nuevos: `parse_legend`/`legend_line` (4) + geometría ya
+   cubierta. Total 126.
 5. **README** ✅ primera sección reescrita (EN y ES): "gestor de repositorios,
    no cliente git", tabla honesta de las 5 acciones con su nivel de seguridad,
    mock de texto del panel `/repos`, y un "lo que Git Hero NO es" (rebase
@@ -94,6 +117,9 @@ fix(git): porcelain v2 parser keeps paths containing spaces (regression, verifie
 chore(release): v0.4.0 - repo-manager positioning, CHANGELOG, RESUMEN with real metrics
 feat(repos): /repos becomes sidebar type-ahead browser - recursive scan, filter without git, click to open
 docs: repository browser wording across README/CHANGELOG/RESUMEN (feedback iteration)
+feat(ui): repo browser is the no-repo default; bold name chips + here marker + location badge
+docs: no-repo default browser + location badge across README/CHANGELOG/RESUMEN
+fix(ui): FILES/COMMITS follow-selection scrolling, / opens command bar from browser, persistent footer keybind strip
 ```
 
 *(Locales, sin push, sin tags, config JSON intacto — `Config` no ganó campos

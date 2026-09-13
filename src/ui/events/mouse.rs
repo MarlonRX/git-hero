@@ -1,8 +1,8 @@
-use ratatui::layout::Rect;
-
 use crate::git;
 use crate::theme::get_themes;
+use crate::ui::rendering::panels::{browser_scroll, sidebar_split};
 use crate::ui::state::AppState;
+use ratatui::layout::Rect;
 
 pub fn mouse_setup(col: u16, row: u16, s: &mut AppState, area: Rect) {
     let mw = 60;
@@ -101,64 +101,87 @@ pub fn mouse_no_repo(_col: u16, row: u16, s: &mut AppState, inner: Rect) {
     }
 }
 
-pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, inner: Rect) {
-    let sidebar_w = (inner.width / 4).max(20);
-    let split_x = inner.x + sidebar_w;
-    let header_h: u16 = 2;
+/// Dashboard clicks. `body` MUST be the same rect `draw_ui` hands to
+/// `draw_dashboard` (i.e. `body_area(inner)`); all geometry comes from the
+/// same helpers the renderer uses (`sidebar_split`, `browser_scroll`), so
+/// click rows always line up with painted rows.
+pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, body: Rect) {
+    if body.width < 50 {
+        return; // compact layout has no interactive rows
+    }
+    let (files_col, _browser) = sidebar_split(body, s.show_repo_overview, s.repo_view.len());
+    let split_x = body.x + files_col.width;
 
-    // Sidebar click zones
-    let info_end_y = inner.y + header_h + 3; // STATUS panel (3 rows)
-    let shortcuts_start_y = inner.y + inner.height.saturating_sub(9); // SHORTCUTS panel (9 rows)
-
-    if col >= inner.x && col < split_x {
-        // Clicked in sidebar
-        if row < info_end_y {
-            // STATUS panel → focus files
-            s.focus_pane = "files".into();
-        } else if row >= shortcuts_start_y {
-            // SHORTCUTS panel → focus diff
-            s.focus_pane = "diff".into();
-        } else {
-            // FILES panel → select file or toggle directory
-            let clicked = row.saturating_sub(info_end_y) as usize;
-            if clicked < s.flat_entries.len() {
-                s.focus_pane = "files".into();
-                s.flat_idx = clicked;
-                s.diff_scroll_offset = 0;
-                let fi = s.flat_entries[clicked].file_idx;
-                s.selected_file_idx = fi;
-                if col >= inner.x + 2 && col <= inner.x + 6 {
-                    s.toggle_stage_file(fi);
-                } else {
-                    s.update_diff_content();
+    if col < split_x {
+        // FILES panel (browser clicks are handled before we get here).
+        let list_top = files_col.y + 1; // first row inside the border
+        let rows_h = files_col.height.saturating_sub(2) as usize;
+        let has_indicator = s
+            .files
+            .iter()
+            .any(|f| matches!(f.status.as_str(), "A" | "M" | "MM" | "D" | "??"));
+        if !s.flat_entries.is_empty() && row >= list_top {
+            let total = s.flat_entries.len() + usize::from(has_indicator);
+            let sel_row = s.flat_idx + usize::from(has_indicator);
+            let start = browser_scroll(total, rows_h, sel_row);
+            let clicked = (row - list_top) as usize;
+            if clicked < total {
+                let mut global = start + clicked;
+                if has_indicator {
+                    if global == 0 {
+                        return; // clicked the indicator line
+                    }
+                    global -= 1;
                 }
-            } else {
-                // Clicked empty space in files → still focus files
-                s.focus_pane = "files".into();
+                if let Some(entry) = s.flat_entries.get(global) {
+                    let fi = entry.file_idx;
+                    s.focus_pane = "files".into();
+                    s.flat_idx = global.min(s.flat_entries.len() - 1);
+                    s.diff_scroll_offset = 0;
+                    s.selected_file_idx = fi;
+                    if col > files_col.x && col <= files_col.x + 6 {
+                        // The checkbox column toggles stage.
+                        s.toggle_stage_file(fi);
+                    } else {
+                        s.update_diff_content();
+                    }
+                }
+                return;
             }
         }
-    } else if col >= split_x && col < inner.x + inner.width {
-        // Right panel
-        let right_height = inner.height.saturating_sub(header_h);
-        let diff_height = (right_height * 65 / 100).max(3);
-        let split_y = inner.y + header_h + diff_height;
+        s.focus_pane = "files".into();
+        return;
+    }
 
-        if row >= inner.y + header_h && row < split_y {
-            // DIFF panel → focus diff
-            s.focus_pane = "diff".into();
-        } else if row >= split_y && row < inner.y + inner.height {
-            // COMMITS panel → select commit
-            let commit_start = split_y + 1;
-            let clicked = row.saturating_sub(commit_start) as usize;
-            if clicked < s.commits.len() {
+    // Right side: DIFF over COMMITS, matching draw_dashboard's split
+    // (50/50 when commits are focused, 70/30 otherwise).
+    let right = Rect {
+        x: split_x,
+        y: body.y,
+        width: body.width - files_col.width,
+        height: body.height,
+    };
+    let diff_pct: u16 = if s.focus_pane == "commits" { 50 } else { 70 };
+    let diff_h = (right.height * diff_pct / 100).max(3);
+    let commits_top = right.y + diff_h;
+
+    if row < commits_top {
+        s.focus_pane = "diff".into();
+    } else {
+        let list_top = commits_top + 1; // inside the border row
+        let rows_h = right.height.saturating_sub(diff_h + 2) as usize;
+        let clicked = row.saturating_sub(list_top) as usize;
+        if !s.show_commit_detail {
+            let start = browser_scroll(s.commits.len(), rows_h, s.selected_commit_idx);
+            let idx = start + clicked;
+            if idx < s.commits.len() {
                 s.focus_pane = "commits".into();
-                s.selected_commit_idx = clicked;
+                s.selected_commit_idx = idx;
                 s.diff_scroll_offset = 0;
                 s.update_diff_content();
-            } else {
-                // Clicked empty space in commits → still focus commits
-                s.focus_pane = "commits".into();
+                return;
             }
         }
+        s.focus_pane = "commits".into();
     }
 }

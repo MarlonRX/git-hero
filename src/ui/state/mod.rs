@@ -94,7 +94,6 @@ pub struct AppState {
     pub focus_pane: String,
     pub active_diff: String,
     pub diff_scroll_offset: usize,
-    pub commit_scroll_offset: usize, // Scroll offset for commits panel
 
     // ── Commit Detail View ────────────────────────────────────────
     pub show_commit_detail: bool, // Show detailed commit info when clicking/entering on commit
@@ -228,7 +227,6 @@ impl AppState {
             focus_pane: "files".to_string(),
             active_diff: String::new(),
             diff_scroll_offset: 0,
-            commit_scroll_offset: 0,
             show_commit_detail: false,
             commit_detail_diff: String::new(),
             commit_detail_scroll: 0,

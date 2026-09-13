@@ -5,7 +5,11 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{Terminal, backend::CrosstermBackend, layout::Rect};
 use std::io::Stdout;
 
+use crate::ui::rendering::body_area;
 use crate::ui::rendering::components::calculate_layout_scaled;
+use crate::ui::rendering::panels::{
+    browser_area, browser_rows_rect, browser_scroll, sidebar_split,
+};
 use crate::ui::state::AppState;
 use keyboard::*;
 use mouse::*;
@@ -83,14 +87,6 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         }
     }
 
-    // ── Repo browser (sidebar dropdown; not a modal — but it owns
-    // keystrokes while open so typing becomes the filter). The init
-    // wizard still preempts it when active. ────────────────────────
-    if s.show_repo_overview && !s.init_wizard_active {
-        handle_repo_overview_key(key, s);
-        return true;
-    }
-
     // ── Help Modal ───────────────────────────────────────────────
     if s.show_help_modal {
         s.show_help_modal = false;
@@ -121,6 +117,14 @@ pub fn handle_key_event(key: KeyEvent, s: &mut AppState) -> bool {
         return true;
     }
 
+    // ── Repo browser (sidebar dropdown). Placed AFTER command input so
+    // pressing `/` opens the command bar and typing a written command
+    // never leaks into the browser filter or fires letter shortcuts. ─
+    if s.show_repo_overview && !s.init_wizard_active {
+        handle_repo_overview_key(key, s);
+        return true;
+    }
+
     // ── Normal Mode (not a repo) ─────────────────────────────────
     if !s.is_git_repo {
         return handle_no_repo_key(code, s);
@@ -144,6 +148,7 @@ pub fn handle_mouse_click(
         height: size.height,
     };
     let (_outer, inner) = calculate_layout_scaled(area);
+    let body = body_area(inner);
 
     // Close input
     if s.show_input {
@@ -182,20 +187,19 @@ pub fn handle_mouse_click(
     }
     // Init wizard
     if s.init_wizard_active {
-        mouse_init_wizard(col, row, s, inner);
+        mouse_init_wizard(col, row, s, body);
         return;
     }
     // Repo browser (sidebar dropdown): clicking a row opens that repo;
-    // clicks in its chrome are swallowed. Hit-testing reuses the exact
-    // geometry helpers draw_dashboard paints with, so they cannot drift.
-    if s.show_repo_overview && !s.init_wizard_active {
-        use crate::ui::rendering::body_area;
-        use crate::ui::rendering::panels::{browser_area, browser_rows_rect, browser_scroll};
-        let body = body_area(inner);
-        let area = browser_area(body, s.repo_view.len(), !s.is_git_repo);
-        let in_col = col > area.x && col < area.x + area.width.saturating_sub(1);
-        if in_col {
-            let (rows_top, rows_h) = browser_rows_rect(area);
+    // clicks inside the browser's own rect are swallowed; clicks above it
+    // fall through to the FILES panel. Geometry helpers are shared with
+    // draw_dashboard so hit-testing can never drift from what is painted.
+    if s.show_repo_overview {
+        let bar = browser_area(body, s.repo_view.len(), !s.is_git_repo);
+        let in_col = col > bar.x && col < bar.x + bar.width.saturating_sub(1);
+        let in_rows = row >= bar.y && row < bar.y + bar.height;
+        if in_col && in_rows {
+            let (rows_top, rows_h) = browser_rows_rect(bar);
             let rel = row.saturating_sub(rows_top) as usize;
             if rel < rows_h {
                 let start = browser_scroll(s.repo_view.len(), rows_h, s.repo_cursor);
@@ -210,7 +214,7 @@ pub fn handle_mouse_click(
     }
     // No repo panel
     if !s.is_git_repo {
-        mouse_no_repo(col, row, s, inner);
+        mouse_no_repo(col, row, s, body);
         return;
     }
     // Confirm-remove modal: any click outside the modal dismisses it.
@@ -219,10 +223,15 @@ pub fn handle_mouse_click(
         return;
     }
     // Dashboard clicks
-    mouse_dashboard(col, row, s, inner);
+    mouse_dashboard(col, row, s, body);
 }
 
-/// Handle mouse wheel scroll - scrolls the panel under the cursor
+/// Handle mouse wheel scroll - scrolls the panel under the cursor.
+///
+/// For the three list panels (files, commits, repo browser) the wheel
+/// moves the *selection* and the panel's auto-windowed view follows —
+/// there is no free-floating viewport that can hide the cursor. Only the
+/// diff/detail text panes scroll as viewports.
 pub fn handle_mouse_scroll(
     scroll_up: bool,
     col: u16,
@@ -249,57 +258,82 @@ pub fn handle_mouse_scroll(
         return;
     }
 
-    let sidebar_w = (inner.width / 4).max(20);
-    let split_x = inner.x + sidebar_w;
-    let header_h: u16 = 2;
-    let content_top = inner.y + header_h;
+    let body = body_area(inner);
+    let (files_col, browser) = sidebar_split(body, s.show_repo_overview, s.repo_view.len());
+    let split_x = body.x + files_col.width;
 
-    // Determine which panel the mouse is over
-    if col >= split_x && col < inner.x + inner.width {
-        // Right panel (diff or commits)
-        let right_height = inner.height.saturating_sub(header_h);
-        let diff_height = (right_height * 65 / 100).max(3);
-        let split_y = content_top + diff_height;
+    // Repo browser: the wheel moves its cursor through the filtered view.
+    // Only consume the event when the pointer is actually over the browser
+    // rect; otherwise it should reach the FILES list above it.
+    if s.show_repo_overview
+        && !s.init_wizard_active
+        && let Some(b) = browser
+    {
+        let in_col = col > b.x && col < b.x + b.width;
+        let in_rows = row >= b.y && row < b.y + b.height;
+        if in_col && in_rows {
+            let (rows_top, rows_h) = browser_rows_rect(b);
+            let rel = row.saturating_sub(rows_top) as usize;
+            if rel < rows_h && !s.repo_view.is_empty() {
+                s.repo_cursor = if scroll_up {
+                    s.repo_cursor.saturating_sub(3)
+                } else {
+                    (s.repo_cursor + 3).min(s.repo_view.len() - 1)
+                };
+            }
+            return;
+        }
+    }
 
-        if row >= content_top && row < split_y {
+    if col >= split_x {
+        // Right panel (diff over commits), same split as draw_dashboard.
+        let right = Rect {
+            x: split_x,
+            y: body.y,
+            width: body.width - files_col.width,
+            height: body.height,
+        };
+        let diff_pct: u16 = if s.focus_pane == "commits" { 50 } else { 70 };
+        let diff_h = (right.height * diff_pct / 100).max(3);
+        let commits_top = right.y + diff_h;
+
+        if row < commits_top {
             // Diff panel - scroll diff
             if scroll_up {
-                if s.diff_scroll_offset >= 3 {
-                    s.diff_scroll_offset -= 3;
-                } else {
-                    s.diff_scroll_offset = 0;
-                }
+                s.diff_scroll_offset = s.diff_scroll_offset.saturating_sub(3);
             } else {
                 s.diff_scroll_offset += 3;
             }
-        } else if row >= split_y && row < inner.y + inner.height {
-            // Commits panel - scroll commits or commit detail
+        } else if row < body.y + body.height {
+            // Commits panel
             if s.show_commit_detail {
                 if scroll_up {
-                    if s.commit_detail_scroll >= 3 {
-                        s.commit_detail_scroll -= 3;
-                    } else {
-                        s.commit_detail_scroll = 0;
-                    }
+                    s.commit_detail_scroll = s.commit_detail_scroll.saturating_sub(3);
                 } else {
                     s.commit_detail_scroll += 3;
                 }
-            } else if scroll_up {
-                if s.commit_scroll_offset >= 3 {
-                    s.commit_scroll_offset -= 3;
+            } else if !s.commits.is_empty() {
+                s.selected_commit_idx = if scroll_up {
+                    s.selected_commit_idx.saturating_sub(3)
                 } else {
-                    s.commit_scroll_offset = 0;
-                }
-            } else {
-                s.commit_scroll_offset += 3;
+                    (s.selected_commit_idx + 3).min(s.commits.len() - 1)
+                };
+                s.update_diff_content();
+                s.diff_scroll_offset = 0;
             }
         }
-    } else if col >= inner.x && col < split_x {
-        // Left sidebar - scroll files list
-        let files_area_top = content_top + 3; // After STATUS block
-        if row >= files_area_top {
-            // Could add file list scroll here if needed in the future
-            // For now, just ignore sidebar scroll
+    } else if col >= body.x && !s.flat_entries.is_empty() {
+        // Left sidebar - the wheel now actually scrolls the files list by
+        // moving the selection (the old code ignored sidebar wheel).
+        s.flat_idx = if scroll_up {
+            s.flat_idx.saturating_sub(3)
+        } else {
+            (s.flat_idx + 3).min(s.flat_entries.len() - 1)
+        };
+        if let Some(entry) = s.flat_entries.get(s.flat_idx) {
+            s.selected_file_idx = entry.file_idx;
         }
+        s.update_diff_content();
+        s.diff_scroll_offset = 0;
     }
 }

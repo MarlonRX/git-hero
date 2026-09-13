@@ -21,8 +21,8 @@ use components::{
 
 /// Header rows occupied by the logo/status block inside the inner frame.
 pub const HEADER_H: u16 = 9;
-/// Footer rows (separator + status line).
-pub const FOOTER_H: u16 = 2;
+/// Footer rows (separator + status line + persistent keybind strip).
+pub const FOOTER_H: u16 = 3;
 
 /// The body rectangle between header and footer for a given inner frame.
 /// Shared by `draw_ui` and the mouse handlers so hit-testing geometry can
@@ -280,8 +280,10 @@ fn draw_status_line(f: &mut Frame, x: u16, y: u16, width: u16, s: &AppState) {
     }
 }
 
-/// Bottom 2-row footer: thin separator line, status message on the
-/// left, keybind legend on the right.
+/// Footer: separator, status message, and the persistent keybind strip.
+/// The strip shows `[key] action` chips for the current context (repo /
+/// browser / no-repo), degrading to a `…` as the terminal narrows, so the
+/// letter commands are always in front of the user.
 fn draw_footer(f: &mut Frame, footer: Rect, s: &AppState) {
     draw_solid_hline(f, footer.x, footer.y, footer.width, s.theme.border);
 
@@ -304,22 +306,84 @@ fn draw_footer(f: &mut Frame, footer: Rect, s: &AppState) {
         Rect {
             x: footer.x + 1,
             y: footer.y + 1,
-            width: footer.width / 2,
+            width: footer.width.saturating_sub(2),
             height: 1,
         },
     );
 
-    let legend = translate(&s.language, "footer_help").into_owned();
-    let llen = legend.chars().count() as u16;
+    // Row 3: the keybind strip.
+    let legend_key = if s.show_input {
+        // While typing a command the strip itself changes shape: what
+        // matters now is Tab/Enter/Esc, not the letter shortcuts.
+        "legend_typing"
+    } else if s.is_git_repo {
+        "legend_repo"
+    } else if s.show_repo_overview {
+        "legend_browser"
+    } else {
+        "legend_norepo"
+    };
+    let raw = translate(&s.language, legend_key);
+    let parts = parse_legend(&raw);
+    let line = legend_line(&parts, footer.width.saturating_sub(2), &s.theme);
     f.render_widget(
-        Paragraph::new(legend).style(Style::default().fg(s.theme.dimmed).bg(s.theme.background)),
+        Paragraph::new(line).style(Style::default().bg(s.theme.background)),
         Rect {
-            x: footer.x + footer.width.saturating_sub(llen + 1),
-            y: footer.y + 1,
-            width: llen,
+            x: footer.x + 1,
+            y: footer.y + 2,
+            width: footer.width.saturating_sub(2),
             height: 1,
         },
     );
+}
+
+/// Parse the `k:label|k:label|…` legend payloads from the i18n dict.
+pub(crate) fn parse_legend(raw: &str) -> Vec<(&str, &str)> {
+    raw.split('|')
+        .filter_map(|part| {
+            let mut kv = part.splitn(2, ':');
+            let key = kv.next()?.trim();
+            let label = kv.next()?.trim();
+            (!key.is_empty() && !label.is_empty()).then_some((key, label))
+        })
+        .collect()
+}
+
+/// Build a single styled line of `[k] label` chips that fits `width`,
+/// dropping the tail (with a `…` marker) when it cannot.
+pub(crate) fn legend_line(
+    parts: &[(&str, &str)],
+    width: u16,
+    theme: &crate::theme::Theme,
+) -> ratatui::text::Line<'static> {
+    use ratatui::text::Span;
+    let key_style = Style::default()
+        .fg(theme.background)
+        .bg(theme.accent)
+        .add_modifier(Modifier::BOLD);
+    let label_style = Style::default().fg(theme.dimmed).bg(theme.background);
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    let mut used: u16 = 0;
+    let mut truncated = false;
+    for (key, label) in parts {
+        // " [k] label" costs: 1 sep + [ + key + ] + 1 space + label.
+        let cost = 1 + (key.chars().count() as u16) + 2 + 1 + (label.chars().count() as u16);
+        if used + cost > width {
+            truncated = true;
+            break;
+        }
+        spans.push(Span::styled(format!(" [{key}]"), key_style));
+        spans.push(Span::styled(format!(" {label}"), label_style));
+        used += cost;
+    }
+    if truncated {
+        let dots = 1;
+        if used + dots <= width && !spans.is_empty() {
+            spans.pop(); // last label makes room for the ellipsis
+            spans.push(Span::styled(" \u{2026}", label_style));
+        }
+    }
+    ratatui::text::Line::from(spans)
 }
 
 /// Input bar that overlays the bottom border. Hidden while a modal is
@@ -490,5 +554,58 @@ mod tests {
         let _: fn(&mut Frame, Rect, &crate::theme::Theme) = draw_background;
         let _: fn(&mut Frame, Rect, &crate::ui::state::AppState) = draw_banner;
         let _: fn(&mut Frame, u16, u16, u16, &crate::ui::state::AppState) = draw_status_line;
+    }
+
+    #[test]
+    fn parse_legend_splits_key_value_pairs() {
+        assert_eq!(
+            parse_legend("c:commit|q:quit"),
+            vec![("c", "commit"), ("q", "quit")]
+        );
+    }
+
+    #[test]
+    fn parse_legend_skips_malformed_parts() {
+        let parts = parse_legend("a:stage|novalue|:emptykey||b:pop");
+        assert_eq!(parts, vec![("a", "stage"), ("b", "pop")]);
+    }
+
+    #[test]
+    fn all_legend_keys_parse_to_pairs_in_both_languages() {
+        for key in [
+            "legend_repo",
+            "legend_norepo",
+            "legend_browser",
+            "legend_typing",
+        ] {
+            for lang in ["en", "es"] {
+                let raw = crate::i18n::translate(lang, key);
+                let parts = parse_legend(&raw);
+                assert!(
+                    parts.len() >= 3,
+                    "legend {key} ({lang}) parsed to too few parts: {raw:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn legend_line_fits_width_and_marks_truncation() {
+        let theme = crate::theme::get_theme_by_name("Nord");
+        let parts = parse_legend("a:apple|b:banana|c:cherry");
+        // Wide enough for all three.
+        let wide = legend_line(&parts, 80, &theme);
+        let wide_text: String = wide.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(wide_text.contains("apple") && wide_text.contains("cherry"));
+        // Room for one chip + ellipsis on the middle ones.
+        let narrow = legend_line(&parts, 20, &theme);
+        let last = narrow.spans.last().unwrap().content.clone();
+        assert!(
+            last.contains('\u{2026}'),
+            "expected ellipsis, got {narrow:?}"
+        );
+        // Zero width produces no spans and must not panic.
+        let none = legend_line(&parts, 0, &theme);
+        assert!(none.spans.is_empty());
     }
 }

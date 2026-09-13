@@ -99,6 +99,11 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "git_flow_title" => "GIT FLOW",
     // ── TUI footer / input bar (were hardcoded EN/ES literals) ───
     "footer_help" => "? Help | q Quit",
+    // Persistent keybind strip (footer row 3): `key:label|…` parts.
+    "legend_repo" => "c:commit|p:push|l:pull|f:fetch|a:stage|u:unstage|s:stash|d:pop|b:branches|r:undo|g:repos|y:copy|t:themes|?:help|/:command|q:quit",
+    "legend_norepo" => "Enter:init repo|g:repos|/:command|t:themes|?:help|q:quit",
+    "legend_browser" => "type:filter|Enter:open|/:command|Ctrl+R:rescan|Esc:close",
+    "legend_typing" => "Enter:run command|Tab:complete|Esc:cancel",
     "input_placeholder" => "Type a command...",
     "modal_close_hint" => "Press any key to close.",
     "modal_close_keys" => "?/Esc Close | q Quit | / Cmd bar",
@@ -212,6 +217,10 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "cli_not_repo" => "No estás dentro de un repositorio git",
     "git_flow_title" => "FLUJO GIT",
     "footer_help" => "? Ayuda | q Salir",
+    "legend_repo" => "c:commit|p:push|l:pull|f:fetch|a:preparar|u:quitar|s:stash|d:restaurar|b:ramas|r:deshacer|g:repos|y:copiar|t:temas|?:ayuda|/:comandos|q:salir",
+    "legend_norepo" => "Enter:nuevo repo|g:repos|/:comandos|t:temas|?:ayuda|q:salir",
+    "legend_browser" => "teclear:filtrar|Enter:abrir|/:comandos|Ctrl+R:refresco|Esc:cerrar",
+    "legend_typing" => "Enter:ejecutar|Tab:completar|Esc:cancelar",
     "input_placeholder" => "Escribe un comando...",
     "modal_close_hint" => "Presiona cualquier tecla para cerrar.",
     "modal_close_keys" => "?/Esc Cerrar | q Salir | / Barra de comandos",

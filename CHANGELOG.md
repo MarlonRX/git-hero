@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Esc` closes. Header line counts how many repos have uncommitted changes.
   Cost is two `git` processes per repo, only on open/re-scan — never per
   frame.
+- **Browser as the no-repo landing screen**: opening `gith` in a directory
+  that is not a repository (or `/cd`-ing to one, or after `/remove-repo`)
+  now auto-opens the Repository Browser on the left and keeps the classic
+  "Initialize Git repository here / Change Directory" options on the right.
+  `Esc` hands the keyboard back to those options; clicking a row enters it.
+- **Location made obvious**: the current folder/repo name is now a bold
+  chip with background in the header status line; in the browser, repo
+  names render as bold surface chips and the repository you are currently
+  inside is tagged `● here`.
+- **Persistent keybind strip**: the footer gained a third row of
+  `[key] action` chips for the current context (repo / browser / no-repo /
+  typing). Letter shortcuts are now always on screen and the strip degrades
+  to an ellipsis on narrow terminals instead of hiding the keys.
 - **Ignored smoke test** `repos::scan_recursively_finds_nested_repos_and_skips_vendor`
   (`cargo test -- --ignored`) proves the recursive scan end-to-end with real
   `git init` (nested repo found, `node_modules` decoy skipped, ordering and
@@ -42,6 +55,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **FILES panel had no scrolling**: with more changed files than the panel
+  height the list simply ran past the bottom and the selection went
+  invisible. The list now windows around the selection (same follow model
+  as the repo browser) and the panel title shows the position
+  (`FILES (12/57)`) while overflowing. The COMMITS list got the same
+  treatment; the old manual `commit_scroll_offset` (which could desync from
+  the selection) is gone — PageUp/PageDown and the mouse wheel move the
+  *selection* everywhere, and the view follows. Mouse wheel over the
+  FILES/COMMITS/browser panels now scrolls them (the sidebar wheel used to
+  be a no-op).
+- `/` reliably opens the command bar from anywhere (repo mode, no-repo mode
+  and from inside the repo browser). Command input is routed above the
+  browser, so no letter shortcut or filter keystroke can fire while you are
+  typing a written command; the footer strip also switches to
+  Enter/Tab/Esc hints while typing.
 - **Panic on non-ASCII commit subjects**: the commits panel truncated subjects
   with byte-slicing (`&subj[..n]`); any accent/emoji/CJK in a subject could
   crash the TUI. Truncation is now character-based (`truncate_subject`, unit
