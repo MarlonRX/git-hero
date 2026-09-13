@@ -1,8 +1,8 @@
 class Gith < Formula
-  desc "Fast and visual TUI for managing Git, written in Rust with Ratatui"
+  desc "Simple Git repository manager TUI: see all your repos at a glance and run the everyday actions"
   homepage "https://github.com/MarlonRX/git-hero"
-  url "https://github.com/MarlonRX/git-hero/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "REPLACE_WITH_ACTUAL_SHA256"
+  url "https://github.com/MarlonRX/git-hero/archive/refs/tags/v0.4.0.tar.gz"
+  sha256 "461092fddba47a46c02d7f7f55bb6f5c14f43101201099ccba6de195c2346848"
   license "MIT"
 
   depends_on "rust" => :build

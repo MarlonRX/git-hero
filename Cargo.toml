@@ -2,13 +2,13 @@
 name = "gith"
 version = "0.4.0"
 edition = "2024"
-description = "Fast and visual TUI for managing Git, written in Rust with Ratatui"
+description = "Simple Git repository manager TUI: see all your repos at a glance (branch, ahead/behind, dirty files) and run the everyday actions"
 license = "MIT"
 authors = ["Marlon Ramirez <mramirezce14@gmail.com>", "abvilabs"]
 repository = "https://github.com/MarlonRX/git-hero"
 homepage = "https://github.com/MarlonRX/git-hero"
 readme = "README.md"
-keywords = ["git", "tui", "cli", "terminal", "ratatui", "development"]
+keywords = ["git", "tui", "cli", "repository-manager", "ratatui"]
 categories = ["command-line-utilities", "development-tools::git"]
 include = [
     "src/**/*",

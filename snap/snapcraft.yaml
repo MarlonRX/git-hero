@@ -1,12 +1,14 @@
 name: git-hero
 base: core22
-version: '0.1.0'
-summary: Fast and visual TUI for managing Git
+version: '0.4.0'
+summary: Simple Git repository manager TUI
 description: |
-  A fast and visual Terminal UI (TUI) application for managing Git, written in
-  Rust with Ratatui. Inspired by tools like lazygit and gitui, but focused on
-  being simple, fast, and read-only to visualize your repository state and
-  execute common Git actions.
+  A simple repository manager for the terminal, written in Rust with Ratatui.
+  See all your Git repositories at a glance (branch, ahead/behind, uncommitted
+  files, last activity) with a recursive, type-to-filter repository browser,
+  jump between them, and run the five everyday actions: status, commit, pull,
+  push and branch switching. Not a full Git client: no interactive rebase or
+  blame - that is lazygit territory.
 
 grade: stable
 confinement: strict
