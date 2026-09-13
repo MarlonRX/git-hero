@@ -750,6 +750,25 @@ fn parse_version_from_ls_remote(output: &str) -> Option<String> {
         })
 }
 
+/// Minimal `"tag_name":"vX.Y.Z"` extractor from the GitHub releases JSON
+/// (no serde dep). Lives OUTSIDE the `#[cfg]` blocks on purpose: the curl
+/// call site only compiles on Linux/macOS, but this function compiles and
+/// is unit-tested on every platform — the v0.3.0 release CI failure was
+/// exactly a platform-only compile error nobody could see from Windows.
+#[allow(dead_code)] // used by the cfg(not(windows)) caller; tests cover it everywhere
+fn parse_tag_name_from_json(body: &str) -> Option<String> {
+    let start = body.find("\"tag_name\"")?;
+    let slice = &body[start..];
+    let colon = slice.find(':')?;
+    let after = &slice[colon + 1..];
+    let open = after.find('"')?;
+    let inner = &after[open + 1..];
+    let close = inner.find('"')?;
+    let tag = &inner[..close];
+    let version = tag.strip_prefix('v').unwrap_or(tag);
+    crate::version::Version::parse(version).map(|_| version.to_string())
+}
+
 /// Check latest version using GitHub API via HTTP.
 fn check_latest_version_http() -> Result<String, crate::git_error::GitError> {
     let url = "https://api.github.com/repos/MarlonRX/git-hero/releases/latest";
@@ -789,19 +808,8 @@ fn check_latest_version_http() -> Result<String, crate::git_error::GitError> {
 
         if output.status.success() {
             let body = String::from_utf8_lossy(&output.stdout);
-            // Simple JSON parsing: find "tag_name":"vX.Y.Z"
-            if let Some(start) = body.find("\"tag_name\"") {
-                let slice = &body[start..];
-                if let Some(q1) = slice.find('"', slice.find(':').unwrap_or(0)) {
-                    let slice = &slice[q1 + 1..];
-                    if let Some(q2) = slice.find('"') {
-                        let tag = &slice[..q2];
-                        let version = tag.strip_prefix('v').unwrap_or(tag).to_string();
-                        if crate::version::Version::parse(&version).is_some() {
-                            return Ok(version);
-                        }
-                    }
-                }
+            if let Some(version) = parse_tag_name_from_json(&body) {
+                return Ok(version);
             }
         }
     }
@@ -1016,10 +1024,36 @@ mod tests {
     #[test]
     fn parse_log_partial_last_entry_is_dropped() {
         // If the trailing NUL is missing, the last entry is incomplete and
-        // `chunks_exact(3)` discards it. Documented behaviour.
+        // `as_chunks::<3>()` discards the remainder. Documented behaviour.
         let s = parse_log_nul("h1\x00now\x00msg 1\x00h2\x00now\x00");
         // We have 5 parts (h1, now, msg 1, h2, now). 5 / 3 = 1 complete + 2 leftover (dropped).
         assert_eq!(s.len(), 1);
         assert_eq!(s[0].hash, "h1");
+    }
+
+    // ── parse_tag_name_from_json (update-check HTTP fallback) ──
+
+    #[test]
+    fn parse_tag_name_realistic_json() {
+        let body = r#"{"url":"https://api.github.com/repos/MarlonRX/git-hero/releases/1","tag_name":"v0.4.0","name":"gith v0.4.0","draft":false,"prerelease":false}"#;
+        assert_eq!(parse_tag_name_from_json(body).as_deref(), Some("0.4.0"));
+    }
+
+    #[test]
+    fn parse_tag_name_without_v_prefix_and_with_spaces() {
+        assert_eq!(
+            parse_tag_name_from_json(r#"{ "tag_name" : "1.2.3" }"#).as_deref(),
+            Some("1.2.3")
+        );
+    }
+
+    #[test]
+    fn parse_tag_name_rejects_garbage() {
+        assert_eq!(parse_tag_name_from_json(""), None);
+        assert_eq!(parse_tag_name_from_json(r#"{"message":"Not Found"}"#), None);
+        // tag_name present but not a valid semver → None.
+        assert_eq!(parse_tag_name_from_json(r#"{"tag_name":"nightly"}"#), None);
+        // Unterminated quote after the colon → None, no panic.
+        assert_eq!(parse_tag_name_from_json(r#"{"tag_name":"0.4.0"#), None);
     }
 }

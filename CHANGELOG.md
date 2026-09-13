@@ -84,6 +84,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (new lints fixed: `chunks_exact_to_as_chunks`, `collapsible_if`,
   `collapsible_match`, `needless_return`, dead code in `version.rs`).
 - Whole tree formatted with `cargo fmt` (CI fmt gate was failing).
+- **Linux/macOS builds were broken since v0.3.0**: the update-check HTTP
+  fallback used `str::find` with two arguments inside a
+  `#[cfg(not(target_os = "windows"))]` block — invisible from a Windows
+  dev machine, but it failed `cargo check` on every CI/release runner
+  (this is why the v0.3.0 release run failed). The parser is now a
+  platform-independent function with unit tests that run on every OS.
 
 ### Security
 
