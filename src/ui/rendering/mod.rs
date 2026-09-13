@@ -103,23 +103,11 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
         height: footer_h,
     };
 
-    // Route the body to the right panel.
+    // Route the body to the right panel. (The repo browser, when open, is
+    // painted later as a centered modal by `draw_active_modal` — on top of
+    // whichever panel is showing.)
     if !s.is_git_repo && !s.init_wizard_active {
-        if s.show_repo_overview {
-            // Outside a repo: browser gets its own left column so the
-            // no-repo panel (init / /cd suggestions) stays visible.
-            let area = panels::browser_area(body, s.repo_view.len(), true);
-            let right = Rect {
-                x: body.x + area.width,
-                y: body.y,
-                width: body.width - area.width,
-                height: body.height,
-            };
-            panels::draw_repo_browser(f, area, s);
-            panels::draw_no_repo_panel(f, s, right);
-        } else {
-            panels::draw_no_repo_panel(f, s, body);
-        }
+        panels::draw_no_repo_panel(f, s, body);
     } else if s.init_wizard_active {
         panels::draw_init_wizard(f, s, body);
     } else {
@@ -127,8 +115,11 @@ pub fn draw_ui(f: &mut Frame, s: &mut AppState) {
     }
 
     draw_footer(f, footer, s);
-    draw_command_bar(f, outer, s);
+    // Modals dim everything painted so far; the command bar paints AFTER
+    // them so it stays bright even when it is opened on top of the repo
+    // browser modal (typing `/` inside the browser).
     draw_active_modal(f, s);
+    draw_command_bar(f, outer, s);
     if s.console_visible && !s.has_active_modal() {
         panels::draw_console(f, area, s);
     }
@@ -533,6 +524,8 @@ fn draw_active_modal(f: &mut Frame, s: &mut AppState) {
         super::modals::draw_confirm_pull_modal(f, s);
     } else if s.show_confirm_remove {
         super::modals::draw_confirm_remove_modal(f, s);
+    } else if s.show_repo_overview {
+        panels::draw_repo_browser(f, s);
     } else if s.show_credentials_modal {
         super::modals::draw_credentials_modal(f, s);
     } else if s.show_update_modal {

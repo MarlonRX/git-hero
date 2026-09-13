@@ -123,11 +123,13 @@ static EN_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "status_unknown_cmd" => "Unknown command: {}. Type /help.",
     // ── Repo browser (multi-repo manager) keys ────────────────────
     "repos_browser_title" => " Repositories ",
+    "repos_cols" => "NAME|BRANCH|SYNC|CHANGES|UPDATED",
+    "repos_dirty" => "{} dirty",
+    "repos_clean" => "clean",
     "repo_overview_help" => "Type to filter - Enter open - Ctrl+R rescan - Esc",
     "repo_overview_summary" => "{} of {} repos have uncommitted changes",
     "repo_overview_empty" => "No Git repositories found near this directory.",
     "repos_no_match" => "No repository matches the filter.",
-    "repos_here" => " here",
     "no_repo_browser_hint" => "Esc = use these options | click a repo to enter it",
 };
 
@@ -237,11 +239,13 @@ static ES_DICT: Map<&'static str, &'static str> = phf::phf_map! {
     "status_language_same" => "El idioma ya es {}",
     "status_unknown_cmd" => "Comando desconocido: {}. Escribe /help.",
     "repos_browser_title" => " Repositorios ",
+    "repos_cols" => "REPOSITORIO|RAMA|SINCR|CAMBIOS|ACTUALIZADO",
+    "repos_dirty" => "{} sucios",
+    "repos_clean" => "limpio",
     "repo_overview_help" => "Escribe para filtrar - Enter abrir - Ctrl+R reescanear - Esc",
     "repo_overview_summary" => "{} de {} repos tienen cambios sin commitear",
     "repo_overview_empty" => "No se encontraron repositorios Git cerca de este directorio.",
     "repos_no_match" => "Ningún repositorio coincide con el filtro.",
-    "repos_here" => " actual",
     "no_repo_browser_hint" => "Esc = usar estas opciones | click en un repo para entrar",
 };
 

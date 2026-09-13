@@ -8,7 +8,7 @@ use std::io::Stdout;
 use crate::ui::rendering::body_area;
 use crate::ui::rendering::components::calculate_layout_scaled;
 use crate::ui::rendering::panels::{
-    browser_area, browser_rows_rect, browser_scroll, sidebar_split,
+    browser_modal_rows_rect, browser_scroll, repo_browser_modal_rect,
 };
 use crate::ui::state::AppState;
 use keyboard::*;
@@ -190,16 +190,18 @@ pub fn handle_mouse_click(
         mouse_init_wizard(col, row, s, body);
         return;
     }
-    // Repo browser (sidebar dropdown): clicking a row opens that repo;
-    // clicks inside the browser's own rect are swallowed; clicks above it
-    // fall through to the FILES panel. Geometry helpers are shared with
-    // draw_dashboard so hit-testing can never drift from what is painted.
+    // Repo browser MODAL: clicking a row opens that repo; clicks in the
+    // modal's chrome are swallowed; a click anywhere outside dismisses it
+    // (same interaction as the other modals). Geometry comes from the very
+    // helpers the renderer uses, so hit-testing cannot drift.
     if s.show_repo_overview {
-        let bar = browser_area(body, s.repo_view.len(), !s.is_git_repo);
-        let in_col = col > bar.x && col < bar.x + bar.width.saturating_sub(1);
-        let in_rows = row >= bar.y && row < bar.y + bar.height;
-        if in_col && in_rows {
-            let (rows_top, rows_h) = browser_rows_rect(bar);
+        let modal = repo_browser_modal_rect(area, s.repo_view.len());
+        let inside = col >= modal.x
+            && col < modal.x + modal.width
+            && row >= modal.y
+            && row < modal.y + modal.height;
+        if inside {
+            let (rows_top, rows_h) = browser_modal_rows_rect(modal);
             let rel = row.saturating_sub(rows_top) as usize;
             if rel < rows_h {
                 let start = browser_scroll(s.repo_view.len(), rows_h, s.repo_cursor);
@@ -211,6 +213,8 @@ pub fn handle_mouse_click(
             }
             return;
         }
+        s.show_repo_overview = false;
+        return;
     }
     // No repo panel
     if !s.is_git_repo {
@@ -259,30 +263,31 @@ pub fn handle_mouse_scroll(
     }
 
     let body = body_area(inner);
-    let (files_col, browser) = sidebar_split(body, s.show_repo_overview, s.repo_view.len());
-    let split_x = body.x + files_col.width;
+    let sidebar_w = (body.width / 4).max(20).min(body.width);
+    let split_x = body.x + sidebar_w;
 
-    // Repo browser: the wheel moves its cursor through the filtered view.
-    // Only consume the event when the pointer is actually over the browser
-    // rect; otherwise it should reach the FILES list above it.
-    if s.show_repo_overview
-        && !s.init_wizard_active
-        && let Some(b) = browser
-    {
-        let in_col = col > b.x && col < b.x + b.width;
-        let in_rows = row >= b.y && row < b.y + b.height;
-        if in_col && in_rows {
-            let (rows_top, rows_h) = browser_rows_rect(b);
-            let rel = row.saturating_sub(rows_top) as usize;
-            if rel < rows_h && !s.repo_view.is_empty() {
-                s.repo_cursor = if scroll_up {
-                    s.repo_cursor.saturating_sub(3)
-                } else {
-                    (s.repo_cursor + 3).min(s.repo_view.len() - 1)
-                };
-            }
-            return;
+    // The browser modal preempts the wheel: over its rows it moves the
+    // cursor; anywhere else the event is swallowed (never scroll behind
+    // an open modal).
+    if s.show_repo_overview {
+        let modal = repo_browser_modal_rect(area, s.repo_view.len());
+        let (rows_top, rows_h) = browser_modal_rows_rect(modal);
+        let inside = col >= modal.x
+            && col < modal.x + modal.width
+            && row >= modal.y
+            && row < modal.y + modal.height;
+        if inside
+            && row >= rows_top
+            && ((row - rows_top) as usize) < rows_h
+            && !s.repo_view.is_empty()
+        {
+            s.repo_cursor = if scroll_up {
+                s.repo_cursor.saturating_sub(3)
+            } else {
+                (s.repo_cursor + 3).min(s.repo_view.len() - 1)
+            };
         }
+        return;
     }
 
     if col >= split_x {
@@ -290,7 +295,7 @@ pub fn handle_mouse_scroll(
         let right = Rect {
             x: split_x,
             y: body.y,
-            width: body.width - files_col.width,
+            width: body.width - sidebar_w,
             height: body.height,
         };
         let diff_pct: u16 = if s.focus_pane == "commits" { 50 } else { 70 };

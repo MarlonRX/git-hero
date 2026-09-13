@@ -10,25 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Repository Browser (`/repos`, key `g`)**: the repository-manager core.
-  A type-ahead dropdown in the sidebar's lower sector (where the shortcuts
-  block used to live) that **recursively** scans the projects folder —
-  depth-bounded (4 levels), skipping hidden and vendor/build directories
-  (`node_modules`, `target`, `vendor`, …) and pruning at each repo root —
-  and shows branch, ahead/behind, dirty-file count and last-commit age per
-  repo, sorted by recent activity. Typing filters with zero git calls;
-  Enter **or click** jumps into the repo (via `/cd`); `Ctrl+R` re-scans;
-  `Esc` closes. Header line counts how many repos have uncommitted changes.
-  Cost is two `git` processes per repo, only on open/re-scan — never per
-  frame.
+  A centered, wide, readable MODAL that **recursively** scans the projects
+  folder — depth-bounded (4 levels), skipping hidden and vendor/build
+  directories (`node_modules`, `target`, `vendor`, …) and pruning at each
+  repo root — with proper columns (`NAME · BRANCH · SYNC · CHANGES ·
+  UPDATED`, localized headers): up to 40-char repo names (no more
+  `appleplus_fro…` in a 20-col sidebar), branch in its own column, a SYNC
+  cell that only shows `↑10 ↓3` when there is actually a delta (no `↑0↓0`
+  noise), changes as `3 dirty` / `clean`, and right-aligned age. Rows are
+  sorted by recent activity; the repo you are inside is marked `●`. Typing
+  filters with zero git calls; Enter **or click** jumps into the repo (via
+  `/cd`); `Ctrl+R` re-scans; `Esc` or clicking outside closes. Header line
+  counts how many repos have uncommitted changes. Cost is two `git`
+  processes per repo, only on open/re-scan — never per frame.
 - **Browser as the no-repo landing screen**: opening `gith` in a directory
   that is not a repository (or `/cd`-ing to one, or after `/remove-repo`)
-  now auto-opens the Repository Browser on the left and keeps the classic
-  "Initialize Git repository here / Change Directory" options on the right.
-  `Esc` hands the keyboard back to those options; clicking a row enters it.
+  now auto-opens the Repository Browser modal over the classic
+  "Initialize Git repository here / Change Directory" options. `Esc` (or a
+  click outside) reveals those options; clicking a row enters the repo.
 - **Location made obvious**: the current folder/repo name is now a bold
-  chip with background in the header status line; in the browser, repo
-  names render as bold surface chips and the repository you are currently
-  inside is tagged `● here`.
+  chip with background in the header status line; in the browser modal,
+  names are bold and wide, and the repository you are currently inside is
+  marked with a green `●` in the selection column.
 - **Persistent keybind strip**: the footer gained a third row of
   `[key] action` chips for the current context (repo / browser / no-repo /
   typing). Letter shortcuts are now always on screen and the strip degrades

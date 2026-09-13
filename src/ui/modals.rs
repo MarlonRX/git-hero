@@ -162,7 +162,7 @@ pub(crate) fn find_cursor_in_view(
 
 /// Draw a modal with solid █ borders (same as main UI layout).
 /// Fills interior with theme background. Returns the inner content area.
-fn draw_modal_frame(
+pub(crate) fn draw_modal_frame(
     f: &mut Frame,
     modal: Rect,
     bg: ratatui::style::Color,
@@ -238,7 +238,7 @@ fn draw_modal_frame(
 }
 
 /// Draw a title badge centered on the top border
-fn draw_modal_title(
+pub(crate) fn draw_modal_title(
     f: &mut Frame,
     modal: Rect,
     title: &str,

@@ -161,9 +161,10 @@ pub struct AppState {
     pub show_confirm_remove: bool,
 
     // ── Repo Browser (multi-repo manager) ──────────────────────────
-    /// Sidebar dropdown listing all repos found by the recursive scan.
-    /// Opened with `g` / `/repos`. NOT a modal: it lives in the dashboard
-    /// sidebar and captures keystrokes only while open.
+    /// `/repos` / `g`: the centered Repository Browser MODAL (recursive
+    /// scan, type-ahead filter). Auto-opens when the current directory is
+    /// not a repo. The scan is on-demand (`cmd_repos` / Ctrl+R), never
+    /// per frame.
     pub show_repo_overview: bool,
     pub repos: Vec<repos::RepoEntry>,
     /// Indices into `repos` surviving the current `repo_filter`, in scan
@@ -654,6 +655,7 @@ impl AppState {
             || self.show_confirm_remove
             || self.show_credentials_modal
             || self.show_update_modal
+            || self.show_repo_overview
     }
 }
 

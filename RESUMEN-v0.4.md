@@ -19,7 +19,7 @@ contra el baseline real.
 
 | Métrica | Plan decía "antes" | Real v0.3.0 (baseline) | v0.4.0 (ahora) | Objetivo del plan |
 |---|---|---|---|---|
-| `cargo test` | 2 | **85** | **126 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
+| `cargo test` | 2 | **85** | **127 (+1 smoke ignorado)** | ≥25 (pedido) / ≥35 (plan) ✅ |
 | Invocaciones git por `refresh_git_status` | 6 | 3 (rev-parse+status+log) | **2** (status doble-función + log) | 2 ✅ |
 | Allocaciones en `translate()`/keystroke | ~40 µs + 2 HashMaps | 0 en hit (OnceLock) | **0, tablas `phf` estáticas compile-time** | ✅ |
 | `if lang == "es"` en `cli.rs` | 9 | 9 (keys existían sin usar) | **0** — diccionario único CLI+TUI | ✅ |
@@ -96,6 +96,18 @@ contra el baseline real.
    por contexto (repo/browser/sin-repo/escribiendo), con degradado por ancho
    (`…`). Tests nuevos: `parse_legend`/`legend_line` (4) + geometría ya
    cubierta. Total 126.
+   **Iteración 5 (feedback en vivo)**: en el sidebar el browser quedaba
+   apretado (nombres `appleplus_fro…`, ruido `↑0↓0` en cada fila) → vuelta a
+   **modal centrado y ancho (60–104 cols)** pero ahora *legible de verdad*:
+   cabecera de columnas localizada (`NAME|BRANCH|SYNC|CHANGES|UPDATED`),
+   nombre hasta 40 chars en negrita, rama con su columna, SYNC que solo
+   muestra `↑10 ↓3` cuando hay delta (punto medio si está al día),
+   `N dirty`/`clean` en palabras, edad alineada a la derecha, `●` verde en
+   el repo actual (columna de selección, compatible con `▶`). Click afuera
+   o `Esc` cierran; el command bar se pinta **después** del modal para que
+   `/` desde el browser siga abriéndolo sin que el overlay lo opaque.
+   Geometría del modal es helper puro (`repo_browser_modal_rect` +
+   `browser_modal_rows_rect`) compartido con hit-testing. Total 127.
 5. **README** ✅ primera sección reescrita (EN y ES): "gestor de repositorios,
    no cliente git", tabla honesta de las 5 acciones con su nivel de seguridad,
    mock de texto del panel `/repos`, y un "lo que Git Hero NO es" (rebase
@@ -120,6 +132,7 @@ docs: repository browser wording across README/CHANGELOG/RESUMEN (feedback itera
 feat(ui): repo browser is the no-repo default; bold name chips + here marker + location badge
 docs: no-repo default browser + location badge across README/CHANGELOG/RESUMEN
 fix(ui): FILES/COMMITS follow-selection scrolling, / opens command bar from browser, persistent footer keybind strip
+refactor(repos): browser back to a wide centered modal - column headers, 40-char names, signal-only sync cell
 ```
 
 *(Locales, sin push, sin tags, config JSON intacto — `Config` no ganó campos

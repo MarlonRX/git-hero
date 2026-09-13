@@ -1,6 +1,6 @@
 use crate::git;
 use crate::theme::get_themes;
-use crate::ui::rendering::panels::{browser_scroll, sidebar_split};
+use crate::ui::rendering::panels::browser_scroll;
 use crate::ui::state::AppState;
 use ratatui::layout::Rect;
 
@@ -102,20 +102,27 @@ pub fn mouse_no_repo(_col: u16, row: u16, s: &mut AppState, inner: Rect) {
 }
 
 /// Dashboard clicks. `body` MUST be the same rect `draw_ui` hands to
-/// `draw_dashboard` (i.e. `body_area(inner)`); all geometry comes from the
-/// same helpers the renderer uses (`sidebar_split`, `browser_scroll`), so
-/// click rows always line up with painted rows.
+/// `draw_dashboard` (i.e. `body_area(inner)`); all geometry mirrors the
+/// renderer (`browser_scroll` for the windowed lists) so click rows always
+/// line up with painted rows. The repo browser is a modal now and is
+/// handled before this function runs.
 pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, body: Rect) {
     if body.width < 50 {
         return; // compact layout has no interactive rows
     }
-    let (files_col, _browser) = sidebar_split(body, s.show_repo_overview, s.repo_view.len());
-    let split_x = body.x + files_col.width;
+    let sidebar_w = (body.width / 4).max(20).min(body.width);
+    let files_area = Rect {
+        x: body.x,
+        y: body.y,
+        width: sidebar_w,
+        height: body.height,
+    };
+    let split_x = body.x + sidebar_w;
 
     if col < split_x {
         // FILES panel (browser clicks are handled before we get here).
-        let list_top = files_col.y + 1; // first row inside the border
-        let rows_h = files_col.height.saturating_sub(2) as usize;
+        let list_top = files_area.y + 1; // first row inside the border
+        let rows_h = files_area.height.saturating_sub(2) as usize;
         let has_indicator = s
             .files
             .iter()
@@ -139,7 +146,7 @@ pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, body: Rect) {
                     s.flat_idx = global.min(s.flat_entries.len() - 1);
                     s.diff_scroll_offset = 0;
                     s.selected_file_idx = fi;
-                    if col > files_col.x && col <= files_col.x + 6 {
+                    if col > files_area.x && col <= files_area.x + 6 {
                         // The checkbox column toggles stage.
                         s.toggle_stage_file(fi);
                     } else {
@@ -158,7 +165,7 @@ pub fn mouse_dashboard(col: u16, row: u16, s: &mut AppState, body: Rect) {
     let right = Rect {
         x: split_x,
         y: body.y,
-        width: body.width - files_col.width,
+        width: body.width - sidebar_w,
         height: body.height,
     };
     let diff_pct: u16 = if s.focus_pane == "commits" { 50 } else { 70 };
